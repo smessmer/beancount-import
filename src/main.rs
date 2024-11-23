@@ -7,4 +7,6 @@ async fn main() {
         .await
         .unwrap();
     println!("Public token: {}", public_token.public_token);
+    let access_token = client.exchange_public_token(public_token).await.unwrap();
+    println!("Access token: {}", access_token.access_token);
 }

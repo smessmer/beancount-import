@@ -4,14 +4,10 @@ use anyhow::Result;
 use rocket::{get, response::content::RawHtml, routes, Config, Shutdown, State};
 use std::sync::Mutex;
 
-use crate::plaid_api::LinkToken;
+use crate::plaid_api::{LinkToken, PublicToken};
 
 const LISTEN_ADDR: IpAddr = IpAddr::V4(Ipv4Addr::new(127, 0, 0, 1));
 const LISTEN_PORT: u16 = 8080;
-
-pub struct PublicToken {
-    pub public_token: String,
-}
 
 struct ServerState {
     link_token: LinkToken,
