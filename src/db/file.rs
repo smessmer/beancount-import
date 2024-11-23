@@ -9,6 +9,13 @@ fn crc() -> Crc<u32> {
     Crc::<u32>::new(&CRC_32_BZIP2)
 }
 
+pub async fn load_or_empty(path: &Path, cipher: &impl Cipher) -> Result<DatabaseV1> {
+    Ok(load(path, cipher).await?.unwrap_or_else(|| {
+        log::info!("Loading database...no database found, creating new database");
+        DatabaseV1::new()
+    }))
+}
+
 /// Returns Ok(None) if the db file doesn't exist yet
 pub async fn load(path: &Path, cipher: &impl Cipher) -> Result<Option<DatabaseV1>> {
     log::info!("Loading database...");

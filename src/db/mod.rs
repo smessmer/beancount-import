@@ -14,4 +14,4 @@ pub enum Database {
 pub use bank_connection::DbBankConnection;
 pub use crypto::{Cipher, XChaCha20Poly1305Cipher};
 pub use database::DatabaseV1;
-pub use file::{load, save};
+pub use file::{load, load_or_empty, save};

@@ -20,9 +20,7 @@ async fn main() -> Result<()> {
     env_logger::init();
 
     let db_cipher = XChaCha20Poly1305Cipher::with_key(db_key());
-    let mut db = db::load(&Path::new(DB_PATH), &db_cipher)
-        .await?
-        .unwrap_or_else(DatabaseV1::new);
+    let mut db = db::load_or_empty(&Path::new(DB_PATH), &db_cipher).await?;
 
     let client = beancount_plaid::plaid_api::Plaid::new();
     let access_token = beancount_plaid::plaid_api::link_new_account(&client)
