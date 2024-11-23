@@ -1,7 +1,7 @@
 use anyhow::Result;
 use std::path::Path;
 
-use beancount_plaid::db::{self, Cipher, DatabaseV1, DbBankConnection, XChaCha20Poly1305Cipher};
+use beancount_plaid::db::{self, Cipher, DbBankConnection, XChaCha20Poly1305Cipher};
 use rand::{rngs::StdRng, RngCore, SeedableRng};
 
 // TODO Configurable DB Location

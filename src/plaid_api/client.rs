@@ -7,6 +7,7 @@ pub struct Plaid {
 impl Plaid {
     pub fn new() -> Plaid {
         Plaid {
+            // TODO Plaid auth should be stored in our database
             client: PlaidClient::with_auth(PlaidAuth::from_env()),
         }
     }
