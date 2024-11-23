@@ -5,6 +5,12 @@ use super::{client::Plaid, AccessToken};
 #[derive(Debug)]
 pub struct AccountId(String);
 
+impl AccountId {
+    pub fn new(id: String) -> Self {
+        Self(id)
+    }
+}
+
 #[derive(Debug)]
 pub struct AccountInfo {
     id: AccountId,

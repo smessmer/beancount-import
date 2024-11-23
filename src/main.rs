@@ -9,4 +9,6 @@ async fn main() {
         .await
         .unwrap();
     println!("Accounts: {:?}", accounts);
+    let transactions = beancount_plaid::plaid_api::get_transactions(&client, &access_token).await;
+    println!("Transactions: {:?}", transactions);
 }
