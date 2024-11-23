@@ -8,4 +8,8 @@ impl AccessToken {
     pub fn new(access_token: String) -> AccessToken {
         AccessToken { access_token }
     }
+
+    pub(super) fn get(&self) -> &str {
+        &self.access_token
+    }
 }

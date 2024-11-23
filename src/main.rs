@@ -5,4 +5,8 @@ async fn main() {
         .await
         .unwrap();
     println!("Access token: {:?}", access_token);
+    let accounts = beancount_plaid::plaid_api::get_accounts(&client, &access_token)
+        .await
+        .unwrap();
+    println!("Accounts: {:?}", accounts);
 }
