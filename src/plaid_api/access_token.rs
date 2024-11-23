@@ -1,7 +1,7 @@
 // TODO Remove Debug for security since the token is a secret
 #[derive(Debug)]
 pub struct AccessToken {
-    access_token: String,
+    pub access_token: String,
 }
 
 impl AccessToken {

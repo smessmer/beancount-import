@@ -3,7 +3,7 @@ use anyhow::Result;
 use super::{client::Plaid, AccessToken};
 
 #[derive(Debug)]
-pub struct AccountId(String);
+pub struct AccountId(pub String);
 
 impl AccountId {
     pub fn new(id: String) -> Self {
@@ -13,8 +13,8 @@ impl AccountId {
 
 #[derive(Debug)]
 pub struct AccountInfo {
-    id: AccountId,
-    name: String,
+    pub id: AccountId,
+    pub name: String,
 }
 
 pub async fn get_accounts(client: &Plaid, access_token: &AccessToken) -> Result<Vec<AccountInfo>> {

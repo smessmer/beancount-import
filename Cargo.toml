@@ -1,14 +1,23 @@
 [package]
+edition = "2021"
 name = "beancount-plaid"
 version = "0.1.0"
-edition = "2021"
 
 [dependencies]
 anyhow = "1.0.93"
+chacha20poly1305 = {version = "0.10.1", features = ["std"]}
 chrono = "0.4.38"
+crc = "3.2.1"
 env_logger = "0.11.5"
 log = "0.4.22"
 open = "5.3.1"
 plaid = "8.0.0"
+postcard = {version = "1.0.10", features = ["use-std", "use-crc"]}
 rocket = "0.5.1"
+serde = "1.0.215"
 tokio = "1.41.1"
+rand = "0.8.5"
+
+[dev-dependencies]
+hex = "0.4.3"
+tempfile = "3.14.0"
