@@ -1,12 +1,8 @@
 #[tokio::main]
 async fn main() {
     let client = beancount_plaid::plaid_api::Plaid::new();
-    let link_token = client.link_token_create().await.unwrap();
-    println!("Link token: {}", link_token.link_token);
-    let public_token = beancount_plaid::link_http_server::link_in_browser(link_token)
+    let access_token = beancount_plaid::plaid_api::link_new_account(&client)
         .await
         .unwrap();
-    println!("Public token: {}", public_token.public_token);
-    let access_token = client.exchange_public_token(public_token).await.unwrap();
-    println!("Access token: {}", access_token.access_token);
+    println!("Access token: {:?}", access_token);
 }

@@ -4,7 +4,7 @@ use anyhow::Result;
 use rocket::{get, response::content::RawHtml, routes, Config, Shutdown, State};
 use std::sync::Mutex;
 
-use crate::plaid_api::{LinkToken, PublicToken};
+use super::tokens::{LinkToken, PublicToken};
 
 const LISTEN_ADDR: IpAddr = IpAddr::V4(Ipv4Addr::new(127, 0, 0, 1));
 const LISTEN_PORT: u16 = 8080;
@@ -46,7 +46,7 @@ pub async fn link_in_browser(link_token: LinkToken) -> Result<PublicToken> {
 
 #[get("/")]
 fn show_auth_page(state: &State<ServerState>) -> RawHtml<String> {
-    let link_token = &state.link_token.link_token;
+    let link_token = &state.link_token.0;
     RawHtml(format!(
         r#"
         <html>
@@ -89,9 +89,7 @@ fn submit_token_api(
     state: &State<ServerState>,
     shutdown: Shutdown,
 ) -> RawHtml<&'static str> {
-    *state.public_token.lock().unwrap() = Some(PublicToken {
-        public_token: token.to_string(),
-    });
+    *state.public_token.lock().unwrap() = Some(PublicToken(token.to_string()));
     shutdown.notify();
     RawHtml(
         r#"
