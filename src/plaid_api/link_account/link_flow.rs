@@ -16,9 +16,18 @@ const PRODUCTS: &[&str] = &["transactions"];
 
 /// Link a new account and return the access token. This will launch an in-browser account linking flow with Plaid's UI
 pub async fn link_new_account(client: &Plaid) -> Result<AccessToken> {
-    let link_token = link_token_create(client).await?;
+    log::info!("Requesting link token...");
+    let link_token: LinkToken = link_token_create(client).await?;
+    log::info!("Requesting link token...done");
+
+    log::info!("Initiating link flow...");
     let public_token = link_http_server::link_in_browser(link_token).await?;
-    exchange_public_token(client, public_token).await
+    log::info!("Initiating link flow...done");
+
+    log::info!("Requesting access token...");
+    let access_token = exchange_public_token(client, public_token).await?;
+    log::info!("Requesting access token...done");
+    Ok(access_token)
 }
 
 async fn link_token_create(client: &Plaid) -> Result<LinkToken> {

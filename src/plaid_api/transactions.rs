@@ -50,15 +50,23 @@ pub async fn get_transactions(
     client: &Plaid,
     access_token: &AccessToken,
 ) -> Result<Vec<Transaction>> {
+    log::info!("Requesting transactions...");
+    log::info!("Requesting transactions...page 1...");
+
     let mut result = Vec::new();
 
     let mut page = sync_transactions_page(client, access_token, None).await?;
     result.extend(page.transactions);
 
+    let mut pagenum = 1;
     while let Some(next_page_cursor) = page.next_page_cursor {
+        pagenum += 1;
+        log::info!("Requesting transactions...page {pagenum}...");
         page = sync_transactions_page(client, access_token, Some(next_page_cursor)).await?;
         result.extend(page.transactions);
     }
+
+    log::info!("Requesting transactions...done");
 
     Ok(result)
 }

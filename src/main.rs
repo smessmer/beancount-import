@@ -1,5 +1,7 @@
 #[tokio::main]
 async fn main() {
+    env_logger::init();
+
     let client = beancount_plaid::plaid_api::Plaid::new();
     let access_token = beancount_plaid::plaid_api::link_new_account(&client)
         .await
