@@ -15,6 +15,9 @@ pub enum Command {
     /// Add a bank connection to the database
     AddConnection,
 
+    /// List all bank connections in the database
+    ListConnections,
+
     /// Download transactions from plaid and put them in the local database
     Sync,
 }

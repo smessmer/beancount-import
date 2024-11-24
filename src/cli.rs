@@ -27,6 +27,7 @@ pub async fn main(args: Args) -> Result<()> {
     match args.command {
         Command::Init => cli.main_init().await?,
         Command::AddConnection => cli.main_add_connection().await?,
+        Command::ListConnections => cli.main_list_connections().await?,
         Command::Sync => cli.main_sync().await?,
     }
     cli.save_db().await?;
@@ -95,6 +96,21 @@ impl Cli {
             access_token.to_db(),
             accounts.into_iter().map(Into::into).collect(),
         ));
+        Ok(())
+    }
+
+    pub async fn main_list_connections(&self) -> Result<()> {
+        if self.db.bank_connections.is_empty() {
+            println!("Connections: (none)");
+        } else {
+            println!("Connections:");
+            for connection in &self.db.bank_connections {
+                println!("* {}", connection.name());
+                for account in connection.accounts() {
+                    println!("   * {}", account.name);
+                }
+            }
+        }
         Ok(())
     }
 
