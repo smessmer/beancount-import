@@ -57,11 +57,14 @@ pub async fn save(db: DatabaseV1, path: &Path, cipher: &impl Cipher) -> Result<(
 mod tests {
     use rand::{rngs::StdRng, RngCore, SeedableRng};
 
-    use crate::db::{
-        bank_connection::{DbAccessToken, DbAccount, DbBankConnection},
-        crypto::XChaCha20Poly1305Cipher,
-        database::DatabaseV1,
-        plaid_auth::DbPlaidAuth,
+    use crate::{
+        db::{
+            bank_connection::{DbAccessToken, DbAccount, DbBankConnection},
+            crypto::XChaCha20Poly1305Cipher,
+            database::DatabaseV1,
+            plaid_auth::DbPlaidAuth,
+        },
+        plaid_api::{AccountId, AccountInfo},
     };
 
     use super::*;
@@ -83,14 +86,14 @@ mod tests {
                 "connection-name-1".to_string(),
                 DbAccessToken::new("access-token-1".to_string()),
                 vec![
-                    DbAccount {
-                        account_id: "account-1".to_string(),
+                    DbAccount::new(AccountInfo {
+                        id: AccountId("account-1".to_string()),
                         name: "Account 1".to_string(),
-                    },
-                    DbAccount {
-                        account_id: "account-2".to_string(),
+                    }),
+                    DbAccount::new(AccountInfo {
+                        id: AccountId("account-2".to_string()),
                         name: "Account 2".to_string(),
-                    },
+                    }),
                 ],
             )],
         }
@@ -102,10 +105,10 @@ mod tests {
             bank_connections: vec![DbBankConnection::new(
                 "connection-name-1".to_string(),
                 DbAccessToken::new("access-token-2".to_string()),
-                vec![DbAccount {
-                    account_id: "account-100".to_string(),
+                vec![DbAccount::new(AccountInfo {
+                    id: AccountId("account-100".to_string()),
                     name: "Account 100".to_string(),
-                }],
+                })],
             )],
         }
     }

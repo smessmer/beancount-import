@@ -94,7 +94,7 @@ impl Cli {
         let connection = DbBankConnection::new(
             name,
             access_token.to_db(),
-            accounts.into_iter().map(Into::into).collect(),
+            accounts.into_iter().map(DbAccount::new).collect(),
         );
         println!();
         println!("{}", style_header("Adding connection:"));
