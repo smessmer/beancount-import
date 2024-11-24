@@ -3,7 +3,7 @@ use plaid::model::TransactionsSyncRequestOptions;
 use rust_decimal::{prelude::FromPrimitive as _, Decimal};
 
 use super::client::Plaid;
-use crate::db::{AccessToken, AccountId, Amount, TransactionCategory};
+use crate::db::{AccessToken, AccountId, Amount, TransactionCategory, TransactionId};
 
 pub async fn get_transactions(
     client: &Plaid,
@@ -77,12 +77,14 @@ async fn sync_transactions_page(
                         )))
                     }
                 };
+                let date = transaction.authorized_date.unwrap_or(transaction.date);
                 Some(Ok(TransactionWithAccount {
                     account_id: AccountId::new(transaction.transaction_base.account_id),
                     transaction: crate::db::Transaction {
+                        id: TransactionId(transaction.transaction_base.transaction_id),
                         merchant_name: transaction.transaction_base.merchant_name,
                         description: transaction.transaction_base.original_description,
-                        date: transaction.authorized_date,
+                        date,
                         category: transaction.personal_finance_category.map(|category| {
                             TransactionCategory {
                                 primary: category.primary,

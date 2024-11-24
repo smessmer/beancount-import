@@ -22,4 +22,4 @@ pub use crypto::{Cipher, XChaCha20Poly1305Cipher};
 pub use database::DatabaseV1;
 pub use file::{load, save};
 pub use plaid_auth::DbPlaidAuth;
-pub use transactions::{Amount, Transaction, TransactionCategory, Transactions};
+pub use transactions::{Amount, Transaction, TransactionCategory, TransactionId, Transactions};

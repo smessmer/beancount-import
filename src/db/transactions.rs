@@ -29,6 +29,10 @@ impl Transactions {
     }
 }
 
+#[derive(Serialize, Deserialize, Clone, Debug)]
+#[cfg_attr(test, derive(PartialEq, Eq))]
+pub struct TransactionId(pub String);
+
 #[derive(Serialize, Deserialize, Clone)]
 #[cfg_attr(test, derive(PartialEq, Eq))]
 pub struct Amount {
@@ -66,9 +70,10 @@ impl Debug for TransactionCategory {
 #[derive(Serialize, Deserialize, Debug, Clone)]
 #[cfg_attr(test, derive(PartialEq, Eq))]
 pub struct Transaction {
+    pub id: TransactionId,
     pub merchant_name: Option<String>,
     pub description: Option<String>,
-    pub date: Option<NaiveDate>,
+    pub date: NaiveDate,
     pub category: Option<TransactionCategory>,
     pub amount: Amount,
 }

@@ -154,6 +154,7 @@ impl Cli {
                 })?
                 .add_transaction(transaction.transaction);
         }
+        // TODO Show added transactions per account
         println!("Added {num_transactions} transactions");
 
         Ok(())
