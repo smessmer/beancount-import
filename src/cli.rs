@@ -1,10 +1,11 @@
 use anyhow::{anyhow, bail, Context as _, Result};
-use console::{style, StyledObject};
+use console::{pad_str, style, Alignment, StyledObject};
 use rand::{rngs::StdRng, RngCore, SeedableRng};
+use rust_decimal::Decimal;
 use std::path::Path;
 
 use crate::args::{Args, Command};
-use crate::db::{Account, AccountId, AccountInfo, Transaction};
+use crate::db::{Account, AccountId, AccountInfo, Amount, Transaction};
 use crate::terminal::{self, BulletPointPrinter};
 
 use super::db::{self, BankConnection, Cipher, DatabaseV1, DbPlaidAuth, XChaCha20Poly1305Cipher};
@@ -174,7 +175,7 @@ impl Cli {
                     printer.print_item(style("(none)").italic());
                 } else {
                     for transaction in account.1.transactions.iter() {
-                        printer.print_item(style_transaction(transaction));
+                        print_transaction(&printer, transaction);
                     }
                 }
             }
@@ -197,6 +198,42 @@ fn print_connection(printer: &BulletPointPrinter, connection: &BankConnection) {
     print_accounts(&printer.indent(), connection.accounts());
 }
 
+fn print_transaction(printer: &BulletPointPrinter, transaction: &Transaction) {
+    let transaction_description = transaction
+        .description
+        .as_ref()
+        .map(|desc| format!(" \"{desc}\""))
+        .unwrap_or_else(|| "".to_string());
+    let merchant_name = transaction
+        .merchant_name
+        .as_ref()
+        .map(|name| format!(" {name}"))
+        .unwrap_or_else(|| "".to_string());
+    let category = transaction
+        .category
+        .as_ref()
+        .map(|cat| format!(" [{}.{}]", cat.primary, cat.detailed))
+        .unwrap_or_else(|| "".to_string());
+    printer.print_item(style_transaction(&format!(
+        "{} {}{}{}{}",
+        pad_str(
+            &style_date(&transaction.date).to_string(),
+            10,
+            Alignment::Left,
+            None
+        ),
+        pad_str(
+            &style_amount(&transaction.amount).to_string(),
+            15,
+            Alignment::Right,
+            None
+        ),
+        style_transaction_description(&transaction_description),
+        style_merchant_name(&merchant_name),
+        style_category(&category),
+    )));
+}
+
 fn style_header(header: &str) -> StyledObject<&str> {
     style(header).bold().underlined()
 }
@@ -209,6 +246,37 @@ fn style_account(account: &AccountInfo) -> StyledObject<&str> {
     style(account.name.as_str()).magenta()
 }
 
-fn style_transaction(transaction: &Transaction) -> StyledObject<String> {
-    style(format!("{:?}", transaction)).italic()
+fn style_transaction(transaction: &str) -> StyledObject<&str> {
+    style(transaction).italic()
+}
+
+fn style_date(date: &chrono::NaiveDate) -> StyledObject<String> {
+    // TODO
+    style(date.format("%Y-%m-%d").to_string())
+}
+
+fn style_amount(amount: &Amount) -> StyledObject<String> {
+    let result = style(format!(
+        "{} {}",
+        amount.amount,
+        amount.iso_currency_code.as_deref().unwrap_or("???")
+    ))
+    .bold();
+    if amount.amount < Decimal::ZERO {
+        result.red()
+    } else {
+        result.green()
+    }
+}
+
+fn style_transaction_description(description: &str) -> StyledObject<&str> {
+    style(description).blue()
+}
+
+fn style_merchant_name(merchant_name: &str) -> StyledObject<&str> {
+    style(merchant_name).yellow()
+}
+
+fn style_category(category: &str) -> StyledObject<&str> {
+    style(category).magenta()
 }
