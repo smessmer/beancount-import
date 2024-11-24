@@ -1,6 +1,7 @@
+use anyhow::Result;
 use serde::{Deserialize, Serialize};
 
-use super::{Transaction, Transactions};
+use super::{Transaction, TransactionId, Transactions};
 
 #[derive(Serialize, Deserialize, Debug, Clone, PartialEq, Eq, Hash)]
 pub struct AccountId(pub String);
@@ -32,7 +33,11 @@ impl Account {
         }
     }
 
-    pub fn add_transaction(&mut self, transaction: Transaction) {
-        self.transactions.add(transaction);
+    pub fn add_transaction(
+        &mut self,
+        transaction_id: TransactionId,
+        transaction: Transaction,
+    ) -> Result<()> {
+        self.transactions.add(transaction_id, transaction)
     }
 }

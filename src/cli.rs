@@ -153,7 +153,7 @@ impl Cli {
                         transaction.account_id,
                     )
                 })?
-                .add_transaction(transaction.transaction);
+                .add_transaction(transaction.transaction_id, transaction.transaction)?;
         }
         // TODO Show added transactions per account
         println!("Added {num_transactions} transactions");
@@ -175,7 +175,7 @@ impl Cli {
                     printer.print_item(style("(none)").italic());
                 } else {
                     for transaction in account.1.transactions.iter() {
-                        print_transaction(&printer, transaction);
+                        print_transaction(&printer, transaction.1);
                     }
                 }
             }
