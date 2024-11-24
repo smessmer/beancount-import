@@ -18,9 +18,13 @@ pub async fn load(path: &Path, cipher: &impl Cipher) -> Result<Option<DatabaseV1
 
     let content_ciphertext = tokio::fs::read(path).await?;
     let content_plaintext = cipher.decrypt(&content_ciphertext)?;
+    let content_decompressed = zstd::bulk::decompress(
+        &content_plaintext,
+        content_plaintext.len().max(1024 * 1024 * 1024),
+    )?;
     let crc = crc();
     let (parsed, remaining): (Database, &[u8]) =
-        postcard::take_from_bytes_crc32(&content_plaintext, crc.digest())?;
+        postcard::take_from_bytes_crc32(&content_decompressed, crc.digest())?;
     let Database::V1(database) = parsed;
     ensure!(0 == remaining.len(), "File had extra bytes");
 
@@ -34,7 +38,11 @@ pub async fn save(db: DatabaseV1, path: &Path, cipher: &impl Cipher) -> Result<(
 
     let crc = crc();
     let content_plaintext = postcard::to_stdvec_crc32(&Database::V1(db), crc.digest())?;
-    let content_ciphertext = cipher.encrypt(&content_plaintext)?;
+    let content_compressed = zstd::bulk::compress(
+        &content_plaintext,
+        zstd::compression_level_range().last().unwrap(),
+    )?;
+    let content_ciphertext = cipher.encrypt(&content_compressed)?;
 
     // First write to temporary file so we don't lose data if writing fails halfway
     let filename = path
