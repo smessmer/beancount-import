@@ -46,8 +46,8 @@ impl Cli {
         if tokio::fs::try_exists(DB_PATH).await.unwrap() {
             bail!("Database already exists");
         }
-        let client_id = terminal::input("Plaid Client ID").unwrap();
-        let secret = terminal::input("Plaid Secret").unwrap();
+        let client_id = terminal::prompt("Plaid Client ID").unwrap();
+        let secret = terminal::prompt("Plaid Secret").unwrap();
         let db = DatabaseV1::new(DbPlaidAuth::new(client_id, secret));
         Ok(Self::_new(db, db_cipher))
     }
@@ -83,7 +83,7 @@ impl Cli {
     }
 
     pub async fn main_add_connection(&mut self) -> Result<()> {
-        let name = terminal::input("Enter a name for the new connection").unwrap();
+        let name = terminal::prompt("Enter a name for the new connection").unwrap();
         println!();
         let access_token = plaid_api::link_new_account(&self.plaid_api).await.unwrap();
         println!("Access token: {:?}", access_token);
