@@ -36,6 +36,7 @@ pub struct TransactionId(pub String);
 #[derive(Serialize, Deserialize, Clone)]
 #[cfg_attr(test, derive(PartialEq, Eq))]
 pub struct Amount {
+    #[serde(with = "rust_decimal::serde::str")]
     pub amount: Decimal,
     pub iso_currency_code: Option<String>,
 }
