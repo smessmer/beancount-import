@@ -48,7 +48,7 @@ pub async fn link_in_browser(link_token: LinkToken) -> Result<PublicToken> {
         .lock()
         .unwrap()
         .take()
-        .unwrap();
+        .expect("Did not complete link flow");
     Ok(public_token)
 }
 
