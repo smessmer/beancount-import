@@ -2,13 +2,15 @@ use std::net::{IpAddr, Ipv4Addr};
 
 use anyhow::Result;
 use console::style;
-use rocket::{get, response::content::RawHtml, routes, Config, Shutdown, State};
+use rocket::{get, http::ContentType, response::content::RawHtml, routes, Config, Shutdown, State};
 use std::sync::Mutex;
 
 use super::tokens::{LinkToken, PublicToken};
 
 const LISTEN_ADDR: IpAddr = IpAddr::V4(Ipv4Addr::new(127, 0, 0, 1));
 const LISTEN_PORT: u16 = 8080;
+
+const FAVICON_ICO: &[u8] = include_bytes!("static/logo.ico");
 
 struct ServerState {
     link_token: LinkToken,
@@ -26,7 +28,7 @@ pub async fn link_in_browser(link_token: LinkToken) -> Result<PublicToken> {
         link_token: link_token,
         public_token: Mutex::new(None),
     })
-    .mount("/", routes![show_auth_page, submit_token_api])
+    .mount("/", routes![show_auth_page, submit_token_api, favicon])
     .ignite()
     .await?;
 
@@ -107,4 +109,9 @@ fn submit_token_api(
         </html>
     "#,
     )
+}
+
+#[get("/favicon.ico")]
+fn favicon() -> (ContentType, &'static [u8]) {
+    (ContentType::Icon, FAVICON_ICO)
 }
