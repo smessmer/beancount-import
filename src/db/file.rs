@@ -57,14 +57,9 @@ pub async fn save(db: DatabaseV1, path: &Path, cipher: &impl Cipher) -> Result<(
 mod tests {
     use rand::{rngs::StdRng, RngCore, SeedableRng};
 
-    use crate::{
-        db::{
-            bank_connection::{DbAccessToken, DbAccount, DbBankConnection},
-            crypto::XChaCha20Poly1305Cipher,
-            database::DatabaseV1,
-            plaid_auth::DbPlaidAuth,
-        },
-        plaid_api::{AccountId, AccountInfo},
+    use crate::db::{
+        account::Account, bank_connection::BankConnection, crypto::XChaCha20Poly1305Cipher,
+        database::DatabaseV1, plaid_auth::DbPlaidAuth, AccessToken, AccountId, AccountInfo,
     };
 
     use super::*;
@@ -82,15 +77,15 @@ mod tests {
     fn some_db_1() -> DatabaseV1 {
         DatabaseV1 {
             plaid_auth: DbPlaidAuth::new("client-id".to_string(), "secret".to_string()),
-            bank_connections: vec![DbBankConnection::new(
+            bank_connections: vec![BankConnection::new(
                 "connection-name-1".to_string(),
-                DbAccessToken::new("access-token-1".to_string()),
+                AccessToken::new("access-token-1".to_string()),
                 vec![
-                    DbAccount::new(AccountInfo {
+                    Account::new(AccountInfo {
                         id: AccountId("account-1".to_string()),
                         name: "Account 1".to_string(),
                     }),
-                    DbAccount::new(AccountInfo {
+                    Account::new(AccountInfo {
                         id: AccountId("account-2".to_string()),
                         name: "Account 2".to_string(),
                     }),
@@ -102,10 +97,10 @@ mod tests {
     fn some_db_2() -> DatabaseV1 {
         DatabaseV1 {
             plaid_auth: DbPlaidAuth::new("client-id".to_string(), "secret".to_string()),
-            bank_connections: vec![DbBankConnection::new(
+            bank_connections: vec![BankConnection::new(
                 "connection-name-1".to_string(),
-                DbAccessToken::new("access-token-2".to_string()),
-                vec![DbAccount::new(AccountInfo {
+                AccessToken::new("access-token-2".to_string()),
+                vec![Account::new(AccountInfo {
                     id: AccountId("account-100".to_string()),
                     name: "Account 100".to_string(),
                 })],

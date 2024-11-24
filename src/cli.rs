@@ -4,10 +4,10 @@ use rand::{rngs::StdRng, RngCore, SeedableRng};
 use std::path::Path;
 
 use crate::args::{Args, Command};
-use crate::db::DbAccount;
+use crate::db::{Account, AccountInfo};
 use crate::terminal::{self, BulletPointPrinter};
 
-use super::db::{self, Cipher, DatabaseV1, DbBankConnection, DbPlaidAuth, XChaCha20Poly1305Cipher};
+use super::db::{self, BankConnection, Cipher, DatabaseV1, DbPlaidAuth, XChaCha20Poly1305Cipher};
 use super::plaid_api;
 
 // TODO Configurable DB Location
@@ -91,10 +91,10 @@ impl Cli {
         let accounts = plaid_api::get_accounts(&self.plaid_api, &access_token)
             .await
             .unwrap();
-        let connection = DbBankConnection::new(
+        let connection = BankConnection::new(
             name,
-            access_token.to_db(),
-            accounts.into_iter().map(DbAccount::new).collect(),
+            access_token,
+            accounts.into_iter().map(Account::new).collect(),
         );
         println!();
         println!("{}", style_header("Adding connection:"));
@@ -128,13 +128,12 @@ impl Cli {
 
     async fn sync_connection(
         &mut self,
-        connection: &DbBankConnection,
+        connection: &BankConnection,
         printer: &BulletPointPrinter,
     ) -> Result<()> {
         print_connection(printer, connection);
         let transactions =
-            plaid_api::get_transactions(&self.plaid_api, &connection.access_token().to_plaid_api())
-                .await;
+            plaid_api::get_transactions(&self.plaid_api, &connection.access_token()).await?;
 
         // TODO Remove println, instead add to db and print number added
         println!("Transactions: {:?}", transactions);
@@ -143,13 +142,13 @@ impl Cli {
     }
 }
 
-fn print_accounts(printer: &BulletPointPrinter, accounts: &[DbAccount]) {
+fn print_accounts(printer: &BulletPointPrinter, accounts: &[Account]) {
     for account in accounts {
-        printer.print_item(style_account(account));
+        printer.print_item(style_account(&account.account_info));
     }
 }
 
-fn print_connection(printer: &BulletPointPrinter, connection: &DbBankConnection) {
+fn print_connection(printer: &BulletPointPrinter, connection: &BankConnection) {
     printer.print_item(style_connection(connection));
     print_accounts(&printer.indent(), connection.accounts());
 }
@@ -158,10 +157,10 @@ fn style_header(header: &str) -> StyledObject<&str> {
     style(header).bold().underlined()
 }
 
-fn style_connection(connection: &DbBankConnection) -> StyledObject<&str> {
+fn style_connection(connection: &BankConnection) -> StyledObject<&str> {
     style(connection.name()).cyan().bold()
 }
 
-fn style_account(account: &DbAccount) -> StyledObject<&str> {
+fn style_account(account: &AccountInfo) -> StyledObject<&str> {
     style(account.name.as_str()).magenta()
 }

@@ -1,54 +1,14 @@
-use anyhow::{ensure, Result};
-use chrono::NaiveDate;
+use anyhow::{anyhow, ensure, Result};
 use plaid::model::TransactionsSyncRequestOptions;
-use std::fmt::Debug;
+use rust_decimal::{prelude::FromPrimitive as _, Decimal};
 
-use super::{accounts::AccountId, client::Plaid, AccessToken};
-
-pub struct Amount {
-    amount: f64,
-    iso_currency_code: Option<String>,
-}
-
-impl Debug for Amount {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(
-            f,
-            "{} {}",
-            self.amount,
-            self.iso_currency_code
-                .as_ref()
-                .map(|a| a.as_str())
-                .unwrap_or("[UKN]")
-        )
-    }
-}
-
-pub struct TransactionCategory {
-    primary: String,
-    detailed: String,
-}
-
-impl Debug for TransactionCategory {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(f, "{}/{}", self.primary, self.detailed,)
-    }
-}
-
-#[derive(Debug)]
-pub struct Transaction {
-    account: AccountId,
-    merchant_name: Option<String>,
-    description: Option<String>,
-    date: Option<NaiveDate>,
-    category: Option<TransactionCategory>,
-    amount: Amount,
-}
+use super::client::Plaid;
+use crate::db::{AccessToken, AccountId, Amount, TransactionCategory};
 
 pub async fn get_transactions(
     client: &Plaid,
     access_token: &AccessToken,
-) -> Result<Vec<Transaction>> {
+) -> Result<Vec<TransactionWithAccount>> {
     log::info!("Requesting transactions...");
     log::info!("Requesting transactions...page 1...");
 
@@ -70,11 +30,14 @@ pub async fn get_transactions(
     Ok(result)
 }
 
-struct TransactionsPage<I>
-where
-    I: Iterator<Item = Transaction>,
-{
-    transactions: I,
+#[derive(Debug)]
+pub struct TransactionWithAccount {
+    pub account: AccountId,
+    pub transaction: crate::db::Transaction,
+}
+
+struct TransactionsPage {
+    transactions: Vec<TransactionWithAccount>,
     next_page_cursor: Option<String>,
 }
 
@@ -82,7 +45,7 @@ async fn sync_transactions_page(
     client: &Plaid,
     access_token: &AccessToken,
     cursor: Option<String>,
-) -> Result<TransactionsPage<impl Iterator<Item = Transaction>>> {
+) -> Result<TransactionsPage> {
     let mut request = client
         .client()
         .transactions_sync(access_token.get())
@@ -97,29 +60,44 @@ async fn sync_transactions_page(
 
     ensure!(response.modified.is_empty(), "Got modified transactions but expected only added transactions, we're not doing delta sync.");
     ensure!(response.removed.is_empty(), "Got removed transactions but expected only added transactions, we're not doing delta sync.");
-    let transactions = response.added.into_iter().flat_map(|transaction| {
-        if transaction.transaction_base.pending {
-            log::warn!("Ignoring pending transaction: {:?}", transaction);
-            None
-        } else {
-            Some(Transaction {
-                account: AccountId::new(transaction.transaction_base.account_id),
-                merchant_name: transaction.transaction_base.merchant_name,
-                description: transaction.transaction_base.original_description,
-                date: transaction.authorized_date,
-                category: transaction.personal_finance_category.map(|category| {
-                    TransactionCategory {
-                        primary: category.primary,
-                        detailed: category.detailed,
+    let transactions = response
+        .added
+        .into_iter()
+        .flat_map(|transaction| {
+            if transaction.transaction_base.pending {
+                log::warn!("Ignoring pending transaction: {:?}", transaction);
+                None
+            } else {
+                let amount = match Decimal::from_f64(transaction.transaction_base.amount) {
+                    Some(amount) => amount,
+                    None => {
+                        return Some(Err(anyhow!(
+                            "Failed to parse amount {}",
+                            transaction.transaction_base.amount
+                        )))
                     }
-                }),
-                amount: Amount {
-                    amount: transaction.transaction_base.amount,
-                    iso_currency_code: transaction.transaction_base.iso_currency_code,
-                },
-            })
-        }
-    });
+                };
+                Some(Ok(TransactionWithAccount {
+                    account: AccountId::new(transaction.transaction_base.account_id),
+                    transaction: crate::db::Transaction {
+                        merchant_name: transaction.transaction_base.merchant_name,
+                        description: transaction.transaction_base.original_description,
+                        date: transaction.authorized_date,
+                        category: transaction.personal_finance_category.map(|category| {
+                            TransactionCategory {
+                                primary: category.primary,
+                                detailed: category.detailed,
+                            }
+                        }),
+                        amount: Amount {
+                            amount,
+                            iso_currency_code: transaction.transaction_base.iso_currency_code,
+                        },
+                    },
+                }))
+            }
+        })
+        .collect::<Result<_>>()?;
     let next_page_cursor = if response.has_more {
         Some(response.next_cursor)
     } else {

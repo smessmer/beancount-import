@@ -1,7 +1,7 @@
 use anyhow::Result;
 use plaid::{model::LinkTokenCreateRequestUser, request::LinkTokenCreateRequired};
 
-use crate::plaid_api::{AccessToken, Plaid};
+use crate::{db::AccessToken, plaid_api::Plaid};
 
 use super::{
     link_http_server,

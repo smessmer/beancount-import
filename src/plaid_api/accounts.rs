@@ -1,21 +1,8 @@
 use anyhow::Result;
 
-use super::{client::Plaid, AccessToken};
+use crate::db::{AccessToken, AccountId, AccountInfo};
 
-#[derive(Debug)]
-pub struct AccountId(pub String);
-
-impl AccountId {
-    pub fn new(id: String) -> Self {
-        Self(id)
-    }
-}
-
-#[derive(Debug)]
-pub struct AccountInfo {
-    pub id: AccountId,
-    pub name: String,
-}
+use super::client::Plaid;
 
 pub async fn get_accounts(client: &Plaid, access_token: &AccessToken) -> Result<Vec<AccountInfo>> {
     log::info!("Requesting accounts...");
