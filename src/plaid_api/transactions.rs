@@ -43,7 +43,6 @@ pub struct Transaction {
     date: Option<NaiveDate>,
     category: Option<TransactionCategory>,
     amount: Amount,
-    pending: bool,
 }
 
 pub async fn get_transactions(
@@ -73,7 +72,7 @@ pub async fn get_transactions(
 
 struct TransactionsPage<I>
 where
-    I: Iterator<Item = Transaction> + ExactSizeIterator,
+    I: Iterator<Item = Transaction>,
 {
     transactions: I,
     next_page_cursor: Option<String>,
@@ -83,7 +82,7 @@ async fn sync_transactions_page(
     client: &Plaid,
     access_token: &AccessToken,
     cursor: Option<String>,
-) -> Result<TransactionsPage<impl Iterator<Item = Transaction> + ExactSizeIterator>> {
+) -> Result<TransactionsPage<impl Iterator<Item = Transaction>>> {
     let mut request = client
         .client()
         .transactions_sync(access_token.get())
@@ -98,22 +97,28 @@ async fn sync_transactions_page(
 
     ensure!(response.modified.is_empty(), "Got modified transactions but expected only added transactions, we're not doing delta sync.");
     ensure!(response.removed.is_empty(), "Got removed transactions but expected only added transactions, we're not doing delta sync.");
-    let transactions = response.added.into_iter().map(|transaction| Transaction {
-        account: AccountId::new(transaction.transaction_base.account_id),
-        merchant_name: transaction.transaction_base.merchant_name,
-        description: transaction.transaction_base.original_description,
-        date: transaction.authorized_date,
-        category: transaction
-            .personal_finance_category
-            .map(|category| TransactionCategory {
-                primary: category.primary,
-                detailed: category.detailed,
-            }),
-        amount: Amount {
-            amount: transaction.transaction_base.amount,
-            iso_currency_code: transaction.transaction_base.iso_currency_code,
-        },
-        pending: transaction.transaction_base.pending,
+    let transactions = response.added.into_iter().flat_map(|transaction| {
+        if transaction.transaction_base.pending {
+            log::warn!("Ignoring pending transaction: {:?}", transaction);
+            None
+        } else {
+            Some(Transaction {
+                account: AccountId::new(transaction.transaction_base.account_id),
+                merchant_name: transaction.transaction_base.merchant_name,
+                description: transaction.transaction_base.original_description,
+                date: transaction.authorized_date,
+                category: transaction.personal_finance_category.map(|category| {
+                    TransactionCategory {
+                        primary: category.primary,
+                        detailed: category.detailed,
+                    }
+                }),
+                amount: Amount {
+                    amount: transaction.transaction_base.amount,
+                    iso_currency_code: transaction.transaction_base.iso_currency_code,
+                },
+            })
+        }
     });
     let next_page_cursor = if response.has_more {
         Some(response.next_cursor)
