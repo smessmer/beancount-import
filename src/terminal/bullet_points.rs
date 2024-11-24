@@ -1,5 +1,3 @@
-use console::StyledObject;
-
 const INDENT_SIZE: usize = 2;
 
 pub struct BulletPointPrinter {
@@ -11,7 +9,7 @@ impl BulletPointPrinter {
         BulletPointPrinter { nesting: 0 }
     }
 
-    pub fn print_item(&self, message: StyledObject<&str>) {
+    pub fn print_item(&self, message: impl std::fmt::Display) {
         let indent = " ".repeat(self.nesting * INDENT_SIZE);
         println!("{}• {}", indent, message);
     }

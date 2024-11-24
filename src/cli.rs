@@ -4,7 +4,7 @@ use rand::{rngs::StdRng, RngCore, SeedableRng};
 use std::path::Path;
 
 use crate::args::{Args, Command};
-use crate::db::{Account, AccountId, AccountInfo};
+use crate::db::{Account, AccountId, AccountInfo, Transaction};
 use crate::terminal::{self, BulletPointPrinter};
 
 use super::db::{self, BankConnection, Cipher, DatabaseV1, DbPlaidAuth, XChaCha20Poly1305Cipher};
@@ -31,6 +31,7 @@ pub async fn main(args: Args) -> Result<()> {
         Command::AddConnection => cli.main_add_connection().await?,
         Command::ListConnections => cli.main_list_connections().await?,
         Command::Sync => cli.main_sync().await?,
+        Command::ListTransactions => cli.main_list_transactions().await?,
     }
     cli.save_db().await?;
     Ok(())
@@ -157,6 +158,28 @@ impl Cli {
 
         Ok(())
     }
+
+    pub async fn main_list_transactions(&mut self) -> Result<()> {
+        println!("{}", style_header("Transactions:"));
+        let printer = BulletPointPrinter::new();
+        for connection in &self.db.bank_connections {
+            printer.print_item(style_connection(connection));
+            let printer = printer.indent();
+            for account in connection.accounts() {
+                printer.print_item(style_account(&account.1.account_info));
+                let printer = printer.indent();
+                let transactions = &account.1.transactions;
+                if transactions.is_empty() {
+                    printer.print_item(style("(none)").italic());
+                } else {
+                    for transaction in account.1.transactions.iter() {
+                        printer.print_item(style_transaction(transaction));
+                    }
+                }
+            }
+        }
+        Ok(())
+    }
 }
 
 fn print_accounts<'a, 'b>(
@@ -183,4 +206,8 @@ fn style_connection(connection: &BankConnection) -> StyledObject<&str> {
 
 fn style_account(account: &AccountInfo) -> StyledObject<&str> {
     style(account.name.as_str()).magenta()
+}
+
+fn style_transaction(transaction: &Transaction) -> StyledObject<String> {
+    style(format!("{:?}", transaction)).italic()
 }

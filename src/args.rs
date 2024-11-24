@@ -20,6 +20,9 @@ pub enum Command {
 
     /// Download transactions from plaid and put them in the local database
     Sync,
+
+    /// Print the list of transactions in the database
+    ListTransactions,
 }
 
 pub fn parse() -> Args {

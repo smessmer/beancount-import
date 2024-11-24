@@ -19,6 +19,14 @@ impl Transactions {
     pub fn add(&mut self, transaction: Transaction) {
         self.transactions.push(transaction);
     }
+
+    pub fn iter(&self) -> impl Iterator<Item = &Transaction> {
+        self.transactions.iter()
+    }
+
+    pub fn is_empty(&self) -> bool {
+        self.transactions.is_empty()
+    }
 }
 
 #[derive(Serialize, Deserialize, Clone)]
