@@ -32,7 +32,7 @@ pub async fn get_transactions(
 
 #[derive(Debug)]
 pub struct TransactionWithAccount {
-    pub account: AccountId,
+    pub account_id: AccountId,
     pub transaction: crate::db::Transaction,
 }
 
@@ -78,7 +78,7 @@ async fn sync_transactions_page(
                     }
                 };
                 Some(Ok(TransactionWithAccount {
-                    account: AccountId::new(transaction.transaction_base.account_id),
+                    account_id: AccountId::new(transaction.transaction_base.account_id),
                     transaction: crate::db::Transaction {
                         merchant_name: transaction.transaction_base.merchant_name,
                         description: transaction.transaction_base.original_description,

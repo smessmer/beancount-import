@@ -1,9 +1,8 @@
 use serde::{Deserialize, Serialize};
 
-use super::Transactions;
+use super::{Transaction, Transactions};
 
-#[derive(Serialize, Deserialize, Debug, Clone)]
-#[cfg_attr(test, derive(PartialEq, Eq))]
+#[derive(Serialize, Deserialize, Debug, Clone, PartialEq, Eq, Hash)]
 pub struct AccountId(pub String);
 
 impl AccountId {
@@ -15,7 +14,6 @@ impl AccountId {
 #[derive(Serialize, Deserialize, Debug, Clone)]
 #[cfg_attr(test, derive(PartialEq, Eq))]
 pub struct AccountInfo {
-    pub id: AccountId,
     pub name: String,
 }
 
@@ -32,5 +30,9 @@ impl Account {
             account_info,
             transactions: Transactions::new_empty(),
         }
+    }
+
+    pub fn add_transaction(&mut self, transaction: Transaction) {
+        self.transactions.add(transaction);
     }
 }

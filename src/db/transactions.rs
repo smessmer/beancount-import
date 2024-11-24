@@ -5,11 +5,19 @@ use std::fmt::Debug;
 
 #[derive(Serialize, Deserialize, Debug, Clone)]
 #[cfg_attr(test, derive(PartialEq, Eq))]
-pub struct Transactions {}
+pub struct Transactions {
+    transactions: Vec<Transaction>,
+}
 
 impl Transactions {
     pub fn new_empty() -> Self {
-        Self {}
+        Self {
+            transactions: vec![],
+        }
+    }
+
+    pub fn add(&mut self, transaction: Transaction) {
+        self.transactions.push(transaction);
     }
 }
 

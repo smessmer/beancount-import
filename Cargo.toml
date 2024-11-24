@@ -22,6 +22,7 @@ httpclient = "0.21.3"
 clap = {version ="4.5.21", features = ["derive"]}
 console = "0.15.8"
 rust_decimal = "1.36.0"
+common_macros = "0.1.1"
 
 [dev-dependencies]
 hex = "0.4.3"

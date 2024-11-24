@@ -1,17 +1,23 @@
+use std::collections::HashMap;
+
 use serde::{Deserialize, Serialize};
 
-use super::{account::Account, AccessToken};
+use super::{account::Account, AccessToken, AccountId};
 
 #[derive(Serialize, Deserialize, Debug, Clone)]
 #[cfg_attr(test, derive(PartialEq, Eq))]
 pub struct BankConnection {
     name: String,
     access_token: AccessToken,
-    accounts: Vec<Account>,
+    accounts: HashMap<AccountId, Account>,
 }
 
 impl BankConnection {
-    pub fn new(name: String, access_token: AccessToken, accounts: Vec<Account>) -> Self {
+    pub fn new(
+        name: String,
+        access_token: AccessToken,
+        accounts: HashMap<AccountId, Account>,
+    ) -> Self {
         Self {
             name,
             access_token,
@@ -27,7 +33,11 @@ impl BankConnection {
         &self.access_token
     }
 
-    pub fn accounts(&self) -> &[Account] {
-        &self.accounts
+    pub fn accounts(&self) -> impl Iterator<Item = (&AccountId, &Account)> {
+        self.accounts.iter()
+    }
+
+    pub fn account_mut(&mut self, account_id: &AccountId) -> Option<&mut Account> {
+        self.accounts.get_mut(account_id)
     }
 }

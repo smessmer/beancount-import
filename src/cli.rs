@@ -4,7 +4,7 @@ use rand::{rngs::StdRng, RngCore, SeedableRng};
 use std::path::Path;
 
 use crate::args::{Args, Command};
-use crate::db::{Account, AccountInfo};
+use crate::db::{Account, AccountId, AccountInfo};
 use crate::terminal::{self, BulletPointPrinter};
 
 use super::db::{self, BankConnection, Cipher, DatabaseV1, DbPlaidAuth, XChaCha20Poly1305Cipher};
@@ -57,7 +57,8 @@ impl Cli {
     pub async fn new_load_db() -> Result<Self> {
         let db_cipher = XChaCha20Poly1305Cipher::with_key(db_key());
         let db = db::load(&Path::new(DB_PATH), &db_cipher)
-            .await?
+            .await
+            .context("Failed to load database")?
             .ok_or_else(|| anyhow!("Database file not found"))?;
         Ok(Self::_new(db, db_cipher))
     }
@@ -72,7 +73,9 @@ impl Cli {
     }
 
     pub async fn save_db(self) -> Result<()> {
-        db::save(self.db, &Path::new(DB_PATH), &self.db_cipher).await?;
+        db::save(self.db, &Path::new(DB_PATH), &self.db_cipher)
+            .await
+            .context("Failed to save database")?;
         Ok(())
     }
 
@@ -94,7 +97,9 @@ impl Cli {
         let connection = BankConnection::new(
             name,
             access_token,
-            accounts.into_iter().map(Account::new).collect(),
+            accounts
+                .map(|(id, account)| (id, Account::new(account)))
+                .collect(),
         );
         println!();
         println!("{}", style_header("Adding connection:"));
@@ -120,31 +125,46 @@ impl Cli {
         println!("{}", style_header("Syncing connections:"));
         let printer = BulletPointPrinter::new();
         // TODO No clone of bank_connections
-        for connection in self.db.bank_connections.clone() {
-            self.sync_connection(&connection, &printer).await?;
+        for connection in &mut self.db.bank_connections {
+            Self::sync_connection(&self.plaid_api, connection, &printer).await?;
         }
         Ok(())
     }
 
     async fn sync_connection(
-        &mut self,
-        connection: &BankConnection,
+        plaid_api: &plaid_api::Plaid,
+        bank_connection: &mut BankConnection,
         printer: &BulletPointPrinter,
     ) -> Result<()> {
-        print_connection(printer, connection);
+        print_connection(printer, bank_connection);
         let transactions =
-            plaid_api::get_transactions(&self.plaid_api, &connection.access_token()).await?;
+            plaid_api::get_transactions(plaid_api, &bank_connection.access_token()).await?;
 
-        // TODO Remove println, instead add to db and print number added
-        println!("Transactions: {:?}", transactions);
+        // TODO Don't just add transactions, look for existing ones to overwrite
+        let num_transactions = transactions.len();
+        for transaction in transactions {
+            bank_connection
+                .account_mut(&transaction.account_id)
+                .ok_or_else(|| {
+                    anyhow!(
+                        "Found transaction for account {:?} that we don't have in our database",
+                        transaction.account_id,
+                    )
+                })?
+                .add_transaction(transaction.transaction);
+        }
+        println!("Added {num_transactions} transactions");
 
         Ok(())
     }
 }
 
-fn print_accounts(printer: &BulletPointPrinter, accounts: &[Account]) {
+fn print_accounts<'a, 'b>(
+    printer: &BulletPointPrinter,
+    accounts: impl Iterator<Item = (&'a AccountId, &'b Account)>,
+) {
     for account in accounts {
-        printer.print_item(style_account(&account.account_info));
+        printer.print_item(style_account(&account.1.account_info));
     }
 }
 

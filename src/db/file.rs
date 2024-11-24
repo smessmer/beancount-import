@@ -55,6 +55,7 @@ pub async fn save(db: DatabaseV1, path: &Path, cipher: &impl Cipher) -> Result<(
 
 #[cfg(test)]
 mod tests {
+    use common_macros::hash_map;
     use rand::{rngs::StdRng, RngCore, SeedableRng};
 
     use crate::db::{
@@ -80,13 +81,11 @@ mod tests {
             bank_connections: vec![BankConnection::new(
                 "connection-name-1".to_string(),
                 AccessToken::new("access-token-1".to_string()),
-                vec![
-                    Account::new(AccountInfo {
-                        id: AccountId("account-1".to_string()),
+                hash_map![
+                    AccountId("account-1".to_string()) => Account::new(AccountInfo {
                         name: "Account 1".to_string(),
-                    }),
+                    }), AccountId("account-2".to_string()) =>
                     Account::new(AccountInfo {
-                        id: AccountId("account-2".to_string()),
                         name: "Account 2".to_string(),
                     }),
                 ],
@@ -100,8 +99,7 @@ mod tests {
             bank_connections: vec![BankConnection::new(
                 "connection-name-1".to_string(),
                 AccessToken::new("access-token-2".to_string()),
-                vec![Account::new(AccountInfo {
-                    id: AccountId("account-100".to_string()),
+                hash_map![AccountId("account-100".to_string()) => Account::new(AccountInfo {
                     name: "Account 100".to_string(),
                 })],
             )],
