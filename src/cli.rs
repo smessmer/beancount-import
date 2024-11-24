@@ -1,9 +1,11 @@
 use anyhow::{anyhow, bail, Context as _, Result};
+use console::{style, StyledObject};
 use rand::{rngs::StdRng, RngCore, SeedableRng};
 use std::path::Path;
 
 use crate::args::{Args, Command};
-use crate::terminal;
+use crate::db::DbAccount;
+use crate::terminal::{self, BulletPointPrinter};
 
 use super::db::{self, Cipher, DatabaseV1, DbBankConnection, DbPlaidAuth, XChaCha20Poly1305Cipher};
 use super::plaid_api;
@@ -86,53 +88,80 @@ impl Cli {
         let name = terminal::prompt("Enter a name for the new connection").unwrap();
         println!();
         let access_token = plaid_api::link_new_account(&self.plaid_api).await.unwrap();
-        println!("Access token: {:?}", access_token);
         let accounts = plaid_api::get_accounts(&self.plaid_api, &access_token)
             .await
             .unwrap();
-        println!("Accounts: {:?}", accounts);
-        self.db.bank_connections.push(DbBankConnection::new(
+        let connection = DbBankConnection::new(
             name,
             access_token.to_db(),
             accounts.into_iter().map(Into::into).collect(),
-        ));
+        );
+        println!();
+        println!("{}", style_header("Adding connection:"));
+        print_connection(&BulletPointPrinter::new(), &connection);
+        self.db.bank_connections.push(connection);
         Ok(())
     }
 
     pub async fn main_list_connections(&self) -> Result<()> {
+        println!("{}", style_header("Connections:"));
         if self.db.bank_connections.is_empty() {
-            println!("Connections: (none)");
+            println!("(none)");
         } else {
-            println!("Connections:");
+            let printer = BulletPointPrinter::new();
             for connection in &self.db.bank_connections {
-                println!("* {}", connection.name());
-                for account in connection.accounts() {
-                    println!("   * {}", account.name);
-                }
+                print_connection(&printer, connection);
             }
         }
         Ok(())
     }
 
     pub async fn main_sync(&mut self) -> Result<()> {
+        println!("{}", style_header("Syncing connections:"));
+        let printer = BulletPointPrinter::new();
         // TODO No clone of bank_connections
         for connection in self.db.bank_connections.clone() {
-            self.sync_connection(&connection).await?;
+            self.sync_connection(&connection, &printer).await?;
         }
         Ok(())
     }
 
-    async fn sync_connection(&mut self, connection: &DbBankConnection) -> Result<()> {
-        println!("Syncing connection: {}", connection.name());
-        for account in connection.accounts() {
-            println!(" * {}", account.name);
-        }
+    async fn sync_connection(
+        &mut self,
+        connection: &DbBankConnection,
+        printer: &BulletPointPrinter,
+    ) -> Result<()> {
+        print_connection(printer, connection);
         let transactions =
             plaid_api::get_transactions(&self.plaid_api, &connection.access_token().to_plaid_api())
                 .await;
 
+        // TODO Remove println, instead add to db and print number added
         println!("Transactions: {:?}", transactions);
 
         Ok(())
     }
+}
+
+fn print_accounts(printer: &BulletPointPrinter, accounts: &[DbAccount]) {
+    for account in accounts {
+        printer.print_item(style_account(account));
+    }
+}
+
+fn print_connection(printer: &BulletPointPrinter, connection: &DbBankConnection) {
+    printer.print_item(style_connection(connection));
+    print_accounts(&printer.indent(), connection.accounts());
+}
+
+fn style_header(header: &str) -> StyledObject<&str> {
+    style(header).bold().underlined()
+}
+
+fn style_connection(connection: &DbBankConnection) -> StyledObject<&str> {
+    style(connection.name()).cyan().bold()
+}
+
+fn style_account(account: &DbAccount) -> StyledObject<&str> {
+    style(account.name.as_str()).magenta()
 }
