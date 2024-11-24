@@ -1,6 +1,7 @@
 use std::net::{IpAddr, Ipv4Addr};
 
 use anyhow::Result;
+use console::style;
 use rocket::{get, response::content::RawHtml, routes, Config, Shutdown, State};
 use std::sync::Mutex;
 
@@ -29,7 +30,12 @@ pub async fn link_in_browser(link_token: LinkToken) -> Result<PublicToken> {
     .ignite()
     .await?;
 
-    open::that(format!("http://{LISTEN_ADDR}:{LISTEN_PORT}"))?;
+    let url = format!("http://{LISTEN_ADDR}:{LISTEN_PORT}");
+
+    println!("Starting in-browser link flow.");
+    println!("If it doesn't open automatically, please open the following URL in your browser:");
+    println!("{}", style(&url).cyan().italic());
+    open::that(url)?;
 
     // start server and wait for it to shutdown
     let server = server.launch().await?;

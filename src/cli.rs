@@ -2,7 +2,8 @@ use anyhow::{anyhow, bail, Context as _, Result};
 use rand::{rngs::StdRng, RngCore, SeedableRng};
 use std::path::Path;
 
-use crate::args::{self, Args, Command};
+use crate::args::{Args, Command};
+use crate::terminal;
 
 use super::db::{self, Cipher, DatabaseV1, DbBankConnection, DbPlaidAuth, XChaCha20Poly1305Cipher};
 use super::plaid_api;
@@ -44,14 +45,8 @@ impl Cli {
         if tokio::fs::try_exists(DB_PATH).await.unwrap() {
             bail!("Database already exists");
         }
-        let client_id = dialoguer::Input::new()
-            .with_prompt("Plaid Client ID")
-            .interact()
-            .unwrap();
-        let secret = dialoguer::Input::new()
-            .with_prompt("Plaid Secret")
-            .interact()
-            .unwrap();
+        let client_id = terminal::input("Plaid Client ID").unwrap();
+        let secret = terminal::input("Plaid Secret").unwrap();
         let db = DatabaseV1::new(DbPlaidAuth::new(client_id, secret));
         Ok(Self::_new(db, db_cipher))
     }
@@ -87,10 +82,8 @@ impl Cli {
     }
 
     pub async fn main_add_connection(&mut self) -> Result<()> {
-        let name = dialoguer::Input::new()
-            .with_prompt("Enter a name for the new connection")
-            .interact()
-            .unwrap();
+        let name = terminal::input("Enter a name for the new connection").unwrap();
+        println!();
         let access_token = plaid_api::link_new_account(&self.plaid_api).await.unwrap();
         println!("Access token: {:?}", access_token);
         let accounts = plaid_api::get_accounts(&self.plaid_api, &access_token)
