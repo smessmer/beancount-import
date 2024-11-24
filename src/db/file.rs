@@ -9,10 +9,14 @@ fn crc() -> Crc<u32> {
     Crc::<u32>::new(&CRC_32_BZIP2)
 }
 
-pub async fn load_or_empty(path: &Path, cipher: &impl Cipher) -> Result<DatabaseV1> {
+pub async fn load_or_else(
+    path: &Path,
+    cipher: &impl Cipher,
+    on_else: impl FnOnce() -> DatabaseV1,
+) -> Result<DatabaseV1> {
     Ok(load(path, cipher).await?.unwrap_or_else(|| {
         log::info!("Loading database...no database found, creating new database");
-        DatabaseV1::new()
+        on_else()
     }))
 }
 
@@ -68,6 +72,7 @@ mod tests {
         bank_connection::{DbAccount, DbBankConnection},
         crypto::XChaCha20Poly1305Cipher,
         database::DatabaseV1,
+        plaid_auth::DbPlaidAuth,
     };
 
     use super::*;
@@ -84,6 +89,10 @@ mod tests {
 
     fn some_db_1() -> DatabaseV1 {
         DatabaseV1 {
+            plaid_auth: DbPlaidAuth {
+                client_id: "client-id".to_string(),
+                secret: "secret".to_string(),
+            },
             bank_connections: vec![DbBankConnection {
                 access_token: "access-token-1".to_string(),
                 accounts: vec![
@@ -102,6 +111,10 @@ mod tests {
 
     fn some_db_2() -> DatabaseV1 {
         DatabaseV1 {
+            plaid_auth: DbPlaidAuth {
+                client_id: "client-id".to_string(),
+                secret: "secret".to_string(),
+            },
             bank_connections: vec![DbBankConnection {
                 access_token: "access-token-2".to_string(),
                 accounts: vec![DbAccount {

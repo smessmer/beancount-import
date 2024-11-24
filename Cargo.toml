@@ -17,6 +17,8 @@ rocket = "0.5.1"
 serde = "1.0.215"
 tokio = "1.41.1"
 rand = "0.8.5"
+dialoguer = "0.11.0"
+httpclient = "0.21.3"
 
 [dev-dependencies]
 hex = "0.4.3"
