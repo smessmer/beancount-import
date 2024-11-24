@@ -1,7 +1,6 @@
-use anyhow::Result;
 use serde::{Deserialize, Serialize};
 
-use super::{Transaction, TransactionId, Transactions};
+use super::{transactions::AddOrVerifyResult, Transaction, TransactionId, Transactions};
 
 #[derive(Serialize, Deserialize, Debug, Clone, PartialEq, Eq, Hash)]
 pub struct AccountId(pub String);
@@ -33,11 +32,11 @@ impl Account {
         }
     }
 
-    pub fn add_transaction(
+    pub fn add_or_verify_transaction(
         &mut self,
         transaction_id: TransactionId,
         transaction: Transaction,
-    ) -> Result<()> {
-        self.transactions.add(transaction_id, transaction)
+    ) -> AddOrVerifyResult {
+        self.transactions.add_or_verify(transaction_id, transaction)
     }
 }

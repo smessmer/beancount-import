@@ -1,4 +1,3 @@
-use anyhow::{bail, Result};
 use chrono::NaiveDate;
 use common_macros::hash_map;
 use rust_decimal::Decimal;
@@ -7,6 +6,13 @@ use std::{
     collections::{hash_map::Entry, HashMap},
     fmt::Debug,
 };
+
+#[must_use]
+pub enum AddOrVerifyResult {
+    Added,
+    ExistsAndMatches,
+    ExistsAndDoesntMatch,
+}
 
 #[derive(Serialize, Deserialize, Debug, Clone)]
 #[cfg_attr(test, derive(PartialEq, Eq))]
@@ -21,15 +27,24 @@ impl Transactions {
         }
     }
 
-    pub fn add(&mut self, id: TransactionId, transaction: Transaction) -> Result<()> {
-        // TODO try_insert
+    pub fn add_or_verify(
+        &mut self,
+        id: TransactionId,
+        transaction: Transaction,
+    ) -> AddOrVerifyResult {
         match self.transactions.entry(id.clone()) {
-            Entry::Occupied(_) => bail!("Transaction {id:?} already exists"),
+            Entry::Occupied(entry) => {
+                if entry.get() == &transaction {
+                    AddOrVerifyResult::ExistsAndMatches
+                } else {
+                    AddOrVerifyResult::ExistsAndDoesntMatch
+                }
+            }
             Entry::Vacant(entry) => {
                 entry.insert(transaction);
+                AddOrVerifyResult::Added
             }
         }
-        Ok(())
     }
 
     pub fn iter(&self) -> impl Iterator<Item = (&TransactionId, &Transaction)> {
@@ -44,8 +59,7 @@ impl Transactions {
 #[derive(Serialize, Deserialize, Clone, Debug, PartialEq, Eq, Hash)]
 pub struct TransactionId(pub String);
 
-#[derive(Serialize, Deserialize, Clone)]
-#[cfg_attr(test, derive(PartialEq, Eq))]
+#[derive(Serialize, Deserialize, Clone, PartialEq, Eq)]
 pub struct Amount {
     #[serde(with = "rust_decimal::serde::str")]
     pub amount: Decimal,
@@ -66,8 +80,7 @@ impl Debug for Amount {
     }
 }
 
-#[derive(Serialize, Deserialize, Clone)]
-#[cfg_attr(test, derive(PartialEq, Eq))]
+#[derive(Serialize, Deserialize, Clone, PartialEq, Eq)]
 pub struct TransactionCategory {
     pub primary: String,
     pub detailed: String,
@@ -79,8 +92,7 @@ impl Debug for TransactionCategory {
     }
 }
 
-#[derive(Serialize, Deserialize, Debug, Clone)]
-#[cfg_attr(test, derive(PartialEq, Eq))]
+#[derive(Serialize, Deserialize, Debug, Clone, PartialEq, Eq)]
 pub struct Transaction {
     pub merchant_name: Option<String>,
     pub description: Option<String>,

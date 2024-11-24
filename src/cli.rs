@@ -2,10 +2,11 @@ use anyhow::{anyhow, bail, Context as _, Result};
 use console::{pad_str, style, Alignment, StyledObject};
 use rand::{rngs::StdRng, RngCore, SeedableRng};
 use rust_decimal::Decimal;
+use std::collections::HashMap;
 use std::path::Path;
 
 use crate::args::{Args, Command};
-use crate::db::{Account, AccountId, AccountInfo, Amount, Transaction};
+use crate::db::{Account, AccountId, AccountInfo, AddOrVerifyResult, Amount, Transaction};
 use crate::terminal::{self, BulletPointPrinter};
 
 use super::db::{self, BankConnection, Cipher, DatabaseV1, DbPlaidAuth, XChaCha20Poly1305Cipher};
@@ -126,7 +127,6 @@ impl Cli {
     pub async fn main_sync(&mut self) -> Result<()> {
         println!("{}", style_header("Syncing connections:"));
         let printer = BulletPointPrinter::new();
-        // TODO No clone of bank_connections
         for connection in &mut self.db.bank_connections {
             Self::sync_connection(&self.plaid_api, connection, &printer).await?;
         }
@@ -138,25 +138,56 @@ impl Cli {
         bank_connection: &mut BankConnection,
         printer: &BulletPointPrinter,
     ) -> Result<()> {
-        print_connection(printer, bank_connection);
+        printer.print_item(style_connection(bank_connection));
+        let printer = printer.indent();
+
         let transactions =
             plaid_api::get_transactions(plaid_api, &bank_connection.access_token()).await?;
 
-        // TODO Don't just add transactions, look for existing ones to overwrite
-        let num_transactions = transactions.len();
+        let mut num_added: HashMap<AccountId, u64> = bank_connection
+            .accounts()
+            .map(|(id, _)| (id.clone(), 0))
+            .collect();
+        let mut num_verified = num_added.clone();
         for transaction in transactions {
-            bank_connection
+            let account = bank_connection
                 .account_mut(&transaction.account_id)
                 .ok_or_else(|| {
                     anyhow!(
                         "Found transaction for account {:?} that we don't have in our database",
                         transaction.account_id,
                     )
-                })?
-                .add_transaction(transaction.transaction_id, transaction.transaction)?;
+                })?;
+            let transaction_id = transaction.transaction_id.clone();
+            let add_or_verify_result = account
+                .add_or_verify_transaction(transaction.transaction_id, transaction.transaction);
+            match add_or_verify_result {
+                AddOrVerifyResult::Added => {
+                    *num_added.get_mut(&transaction.account_id).unwrap() += 1;
+                }
+                AddOrVerifyResult::ExistsAndMatches => {
+                    *num_verified.get_mut(&transaction.account_id).unwrap() += 1;
+                }
+                AddOrVerifyResult::ExistsAndDoesntMatch => {
+                    bail!("Transaction {transaction_id:?} already exists but doesn't match",);
+                }
+            }
         }
-        // TODO Show added transactions per account
-        println!("Added {num_transactions} transactions");
+
+        for account in bank_connection.accounts() {
+            printer.print_item(style_account(&account.1.account_info));
+            let printer = printer.indent();
+            printer.print_item(
+                style(format!("Added: {}", num_added.get(&account.0).unwrap())).italic(),
+            );
+            printer.print_item(
+                style(format!(
+                    "Verified: {}",
+                    num_verified.get(&account.0).unwrap()
+                ))
+                .italic(),
+            );
+        }
 
         Ok(())
     }
@@ -251,7 +282,6 @@ fn style_transaction(transaction: &str) -> StyledObject<&str> {
 }
 
 fn style_date(date: &chrono::NaiveDate) -> StyledObject<String> {
-    // TODO
     style(date.format("%Y-%m-%d").to_string())
 }
 
