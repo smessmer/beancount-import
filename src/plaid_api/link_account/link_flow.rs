@@ -30,7 +30,7 @@ pub async fn link_new_account(client: &Plaid) -> Result<AccessToken> {
     Ok(access_token)
 }
 
-async fn link_token_create(client: &Plaid) -> Result<LinkToken> {
+pub async fn link_token_create(client: &Plaid) -> Result<LinkToken> {
     let response = client
         .client()
         .link_token_create(LinkTokenCreateRequired {

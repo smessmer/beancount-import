@@ -9,17 +9,6 @@ fn crc() -> Crc<u32> {
     Crc::<u32>::new(&CRC_32_BZIP2)
 }
 
-pub async fn load_or_else(
-    path: &Path,
-    cipher: &impl Cipher,
-    on_else: impl FnOnce() -> DatabaseV1,
-) -> Result<DatabaseV1> {
-    Ok(load(path, cipher).await?.unwrap_or_else(|| {
-        log::info!("Loading database...no database found, creating new database");
-        on_else()
-    }))
-}
-
 /// Returns Ok(None) if the db file doesn't exist yet
 pub async fn load(path: &Path, cipher: &impl Cipher) -> Result<Option<DatabaseV1>> {
     log::info!("Loading database...");
@@ -69,7 +58,7 @@ mod tests {
     use rand::{rngs::StdRng, RngCore, SeedableRng};
 
     use crate::db::{
-        bank_connection::{DbAccount, DbBankConnection},
+        bank_connection::{DbAccessToken, DbAccount, DbBankConnection},
         crypto::XChaCha20Poly1305Cipher,
         database::DatabaseV1,
         plaid_auth::DbPlaidAuth,
@@ -89,13 +78,11 @@ mod tests {
 
     fn some_db_1() -> DatabaseV1 {
         DatabaseV1 {
-            plaid_auth: DbPlaidAuth {
-                client_id: "client-id".to_string(),
-                secret: "secret".to_string(),
-            },
-            bank_connections: vec![DbBankConnection {
-                access_token: "access-token-1".to_string(),
-                accounts: vec![
+            plaid_auth: DbPlaidAuth::new("client-id".to_string(), "secret".to_string()),
+            bank_connections: vec![DbBankConnection::new(
+                "connection-name-1".to_string(),
+                DbAccessToken::new("access-token-1".to_string()),
+                vec![
                     DbAccount {
                         account_id: "account-1".to_string(),
                         name: "Account 1".to_string(),
@@ -105,23 +92,21 @@ mod tests {
                         name: "Account 2".to_string(),
                     },
                 ],
-            }],
+            )],
         }
     }
 
     fn some_db_2() -> DatabaseV1 {
         DatabaseV1 {
-            plaid_auth: DbPlaidAuth {
-                client_id: "client-id".to_string(),
-                secret: "secret".to_string(),
-            },
-            bank_connections: vec![DbBankConnection {
-                access_token: "access-token-2".to_string(),
-                accounts: vec![DbAccount {
+            plaid_auth: DbPlaidAuth::new("client-id".to_string(), "secret".to_string()),
+            bank_connections: vec![DbBankConnection::new(
+                "connection-name-1".to_string(),
+                DbAccessToken::new("access-token-2".to_string()),
+                vec![DbAccount {
                     account_id: "account-100".to_string(),
                     name: "Account 100".to_string(),
                 }],
-            }],
+            )],
         }
     }
 

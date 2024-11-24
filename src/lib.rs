@@ -1,2 +1,4 @@
-pub mod db;
-pub mod plaid_api;
+pub mod args;
+pub mod cli;
+mod db;
+mod plaid_api;

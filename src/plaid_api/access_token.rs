@@ -1,7 +1,9 @@
+use crate::db::DbAccessToken;
+
 // TODO Remove Debug for security since the token is a secret
 #[derive(Debug)]
 pub struct AccessToken {
-    pub access_token: String,
+    access_token: String,
 }
 
 impl AccessToken {
@@ -11,5 +13,9 @@ impl AccessToken {
 
     pub(super) fn get(&self) -> &str {
         &self.access_token
+    }
+
+    pub fn to_db(&self) -> DbAccessToken {
+        DbAccessToken::new(self.access_token.clone())
     }
 }
