@@ -2,4 +2,4 @@ mod bullet_points;
 mod prompt;
 
 pub use bullet_points::BulletPointPrinter;
-pub use prompt::prompt;
+pub use prompt::{prompt, prompt_yes_no};

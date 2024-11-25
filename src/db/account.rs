@@ -13,21 +13,46 @@ impl AccountId {
 
 #[derive(Serialize, Deserialize, Debug, Clone)]
 #[cfg_attr(test, derive(PartialEq, Eq))]
-pub struct AccountInfo {
+pub struct PlaidAccountInfo {
     pub name: String,
 }
 
 #[derive(Serialize, Deserialize, Debug, Clone)]
 #[cfg_attr(test, derive(PartialEq, Eq))]
+pub struct BeancountAccountInfo {
+    pub ty: AccountType,
+    pub name_parts: Vec<String>,
+}
+
+impl BeancountAccountInfo {
+    pub fn beancount_name(&self) -> String {
+        let ty = match self.ty {
+            AccountType::Assets => "Assets",
+            AccountType::Liabilities => "Liabilities",
+            AccountType::Equity => "Equity",
+            AccountType::Income => "Income",
+            AccountType::Expenses => "Expenses",
+        };
+        format!("{ty}:{}", self.name_parts.join(":"))
+    }
+}
+
+#[derive(Serialize, Deserialize, Debug, Clone)]
+#[cfg_attr(test, derive(PartialEq, Eq))]
 pub struct Account {
-    pub account_info: AccountInfo,
+    pub plaid_account_info: PlaidAccountInfo,
+    pub beancount_account_info: BeancountAccountInfo,
     pub transactions: Transactions,
 }
 
 impl Account {
-    pub fn new(account_info: AccountInfo) -> Self {
+    pub fn new(
+        plaid_account_info: PlaidAccountInfo,
+        beancount_account_info: BeancountAccountInfo,
+    ) -> Self {
         Self {
-            account_info,
+            plaid_account_info,
+            beancount_account_info,
             transactions: Transactions::new_empty(),
         }
     }
@@ -39,4 +64,13 @@ impl Account {
     ) -> AddOrVerifyResult {
         self.transactions.add_or_verify(transaction_id, transaction)
     }
+}
+
+#[derive(Serialize, Deserialize, Debug, Clone, Copy, PartialEq, Eq, Hash)]
+pub enum AccountType {
+    Assets,
+    Liabilities,
+    Equity,
+    Income,
+    Expenses,
 }

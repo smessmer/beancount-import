@@ -6,7 +6,10 @@ use std::collections::HashMap;
 use std::path::Path;
 
 use crate::args::{Args, Command};
-use crate::db::{Account, AccountId, AccountInfo, AddOrVerifyResult, Amount, Transaction};
+use crate::db::{
+    Account, AccountId, AccountType, AddOrVerifyResult, Amount, BeancountAccountInfo,
+    PlaidAccountInfo, Transaction,
+};
 use crate::export::export_transactions;
 use crate::terminal::{self, BulletPointPrinter};
 
@@ -99,13 +102,14 @@ impl Cli {
         let accounts = plaid_api::get_accounts(&self.plaid_api, &access_token)
             .await
             .unwrap();
-        let connection = BankConnection::new(
-            name,
-            access_token,
-            accounts
-                .map(|(id, account)| (id, Account::new(account)))
-                .collect(),
-        );
+        let accounts = accounts
+            .filter_map(|(id, account)| {
+                prompt_add_account(id, account)
+                    .map(|v| v.map(Ok))
+                    .unwrap_or_else(|err| Some(Err(err)))
+            })
+            .collect::<Result<_>>()?;
+        let connection = BankConnection::new(name, access_token, accounts);
         println!();
         println!("{}", style_header("Adding connection:"));
         print_connection(&BulletPointPrinter::new(), &connection);
@@ -177,7 +181,7 @@ impl Cli {
         }
 
         for account in bank_connection.accounts() {
-            printer.print_item(style_account(&account.1.account_info));
+            printer.print_item(style_account(&account.1));
             let printer = printer.indent();
             printer.print_item(
                 style(format!("Added: {}", num_added.get(&account.0).unwrap())).italic(),
@@ -201,7 +205,7 @@ impl Cli {
             printer.print_item(style_connection(connection));
             let printer = printer.indent();
             for account in connection.accounts() {
-                printer.print_item(style_account(&account.1.account_info));
+                printer.print_item(style_account(&account.1));
                 let printer = printer.indent();
                 let transactions = &account.1.transactions;
                 if transactions.is_empty() {
@@ -227,12 +231,63 @@ impl Cli {
     }
 }
 
+fn prompt_add_account(
+    account_id: AccountId,
+    plaid_account_info: PlaidAccountInfo,
+) -> Result<Option<(AccountId, Account)>> {
+    let prompt = format!("Add account {}", plaid_account_info.name);
+    if terminal::prompt_yes_no(&prompt)? {
+        let beancount_account_info = prompt_beancount_account_info()?;
+        Ok(Some((
+            account_id,
+            Account::new(plaid_account_info, beancount_account_info),
+        )))
+    } else {
+        Ok(None)
+    }
+}
+
+fn prompt_beancount_account_info() -> Result<BeancountAccountInfo> {
+    const PROMPT: &str = "Beancount account name";
+    let mut name = terminal::prompt(PROMPT)?;
+    loop {
+        match parse_beancount_account_info(&name) {
+            Ok(info) => return Ok(info),
+            Err(err) => {
+                println!("{}", style(err).red().bold());
+                name = terminal::prompt(PROMPT)?;
+            }
+        }
+    }
+}
+
+fn parse_beancount_account_info(name: &str) -> Result<BeancountAccountInfo, &'static str> {
+    let mut parts = name.split(':');
+    let ty = parts
+        .next()
+        .expect("There should always be at least one part to the split");
+    let ty = match ty {
+        "Assets" => AccountType::Assets,
+        "Liabilities" => AccountType::Liabilities,
+        "Equity" => AccountType::Equity,
+        "Income" => AccountType::Income,
+        "Expenses" => AccountType::Expenses,
+        _ => return Err(
+            "Account must start with one of: Assets:, Liabilities:, Equity:, Income:, Expenses:",
+        ),
+    };
+    Ok(BeancountAccountInfo {
+        ty,
+        name_parts: parts.map(|v| v.to_string()).collect(),
+    })
+}
+
 fn print_accounts<'a, 'b>(
     printer: &BulletPointPrinter,
     accounts: impl Iterator<Item = (&'a AccountId, &'b Account)>,
 ) {
     for account in accounts {
-        printer.print_item(style_account(&account.1.account_info));
+        printer.print_item(style_account(account.1));
     }
 }
 
@@ -285,8 +340,17 @@ fn style_connection(connection: &BankConnection) -> StyledObject<&str> {
     style(connection.name()).cyan().bold()
 }
 
-fn style_account(account: &AccountInfo) -> StyledObject<&str> {
-    style(account.name.as_str()).magenta()
+fn style_account(account: &Account) -> StyledObject<String> {
+    style(format!(
+        "{} {}",
+        account.plaid_account_info.name,
+        style(format!(
+            "[{}]",
+            account.beancount_account_info.beancount_name()
+        ))
+        .italic(),
+    ))
+    .magenta()
 }
 
 fn style_transaction(transaction: &str) -> StyledObject<&str> {
