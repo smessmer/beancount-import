@@ -1,26 +1,27 @@
 use std::{borrow::Cow, io::stdout};
 
 use anyhow::Result;
-use beancount_core::{
-    metadata::MetaValue, AccountType, Directive, Flag, IncompleteAmount, Ledger, Posting,
-};
+use beancount_core::{metadata::MetaValue, Directive, Flag, IncompleteAmount, Ledger, Posting};
 use common_macros::{hash_map, hash_set};
 
-use crate::db::{Transaction, TransactionId};
+use crate::db::{AccountType, BeancountAccountInfo, ConnectedAccount, Transaction, TransactionId};
 
 pub fn export_transactions<'a>(
-    transactions: impl Iterator<Item = (&'a TransactionId, &'a Transaction)>,
+    transactions: impl Iterator<Item = (&'a ConnectedAccount, &'a TransactionId, &'a Transaction)>,
 ) -> Result<()> {
     let ledger = Ledger {
         directives: transactions
-            .map(|(id, t)| transaction_to_directive(id, t))
+            .map(|(account, id, t)| {
+                transaction_to_beancount(&account.beancount_account_info, id, t)
+            })
             .collect(),
     };
     beancount_render::render(&mut stdout(), &ledger)?;
     Ok(())
 }
 
-fn transaction_to_directive<'a>(
+fn transaction_to_beancount<'a>(
+    account: &'a BeancountAccountInfo,
     transaction_id: &'a TransactionId,
     transaction: &'a Transaction,
 ) -> Directive<'a> {
@@ -36,10 +37,7 @@ fn transaction_to_directive<'a>(
         tags: hash_set![],
         links: hash_set![],
         postings: vec![Posting {
-            account: beancount_core::Account {
-                ty: AccountType::Assets,                                     // TODO
-                parts: vec![Cow::Borrowed("Part1"), Cow::Borrowed("Part2")], // TODO
-            },
+            account: account_to_beancount(account),
             units: IncompleteAmount {
                 num: Some(transaction.amount.amount),
                 currency: transaction
@@ -58,4 +56,20 @@ fn transaction_to_directive<'a>(
         meta: hash_map![],
         source: None,
     })
+}
+
+fn account_to_beancount<'a>(account: &'a BeancountAccountInfo) -> beancount_core::Account<'a> {
+    let ty = match account.ty {
+        AccountType::Assets => beancount_core::AccountType::Assets,
+        AccountType::Liabilities => beancount_core::AccountType::Liabilities,
+        AccountType::Equity => beancount_core::AccountType::Equity,
+        AccountType::Income => beancount_core::AccountType::Income,
+        AccountType::Expenses => beancount_core::AccountType::Expenses,
+    };
+    let parts = account
+        .name_parts
+        .iter()
+        .map(|v| Cow::Borrowed(v.as_str()))
+        .collect();
+    beancount_core::Account { ty, parts }
 }

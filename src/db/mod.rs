@@ -16,7 +16,9 @@ pub enum Database {
 }
 
 pub use access_token::AccessToken;
-pub use account::{Account, AccountId, AccountType, BeancountAccountInfo, PlaidAccountInfo};
+pub use account::{
+    Account, AccountId, AccountType, BeancountAccountInfo, ConnectedAccount, PlaidAccountInfo,
+};
 pub use bank_connection::BankConnection;
 pub use crypto::{Cipher, XChaCha20Poly1305Cipher};
 pub use database::DatabaseV1;
