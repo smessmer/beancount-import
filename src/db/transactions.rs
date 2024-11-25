@@ -94,10 +94,15 @@ impl Debug for TransactionCategory {
 
 #[derive(Serialize, Deserialize, Debug, Clone, PartialEq, Eq)]
 pub struct Transaction {
-    pub merchant_name: Option<String>,
-    pub description: Option<String>,
     pub posted_date: NaiveDate,
     pub authorized_date: Option<NaiveDate>,
     pub category: Option<TransactionCategory>,
     pub amount: Amount,
+    pub merchant_name: Option<String>,
+    pub description_or_merchant_name: Option<String>,
+    pub original_description: Option<String>,
+    pub transaction_type: Option<String>,
+    pub location: Option<String>,
+    pub check_number: Option<String>,
+    pub associated_website: Option<String>,
 }

@@ -319,7 +319,7 @@ fn print_connection(printer: &BulletPointPrinter, connection: &BankConnection) {
 
 fn print_transaction(printer: &BulletPointPrinter, transaction: &Transaction) {
     let transaction_description = transaction
-        .description
+        .original_description
         .as_ref()
         .map(|desc| format!(" \"{desc}\""))
         .unwrap_or_else(|| "".to_string());
@@ -355,6 +355,19 @@ fn print_transaction(printer: &BulletPointPrinter, transaction: &Transaction) {
         style_merchant_name(&merchant_name),
         style_category(&category),
     )));
+    let printer = printer.indent();
+    if let Some(transaction_type) = &transaction.transaction_type {
+        printer.print_item(style(format!("Type: {}", transaction_type)).dim());
+    }
+    if let Some(location) = &transaction.location {
+        printer.print_item(style(format!("Location: {}", location)).dim());
+    }
+    if let Some(website) = &transaction.associated_website {
+        printer.print_item(style(format!("Website: {}", website)).dim());
+    }
+    if let Some(check_number) = &transaction.check_number {
+        printer.print_item(style(format!("Check number: {}", check_number)).dim());
+    }
 }
 
 fn style_header(header: &str) -> StyledObject<&str> {

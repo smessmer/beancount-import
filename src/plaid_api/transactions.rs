@@ -84,7 +84,8 @@ async fn sync_transactions_page(
                     transaction_id: TransactionId(transaction.transaction_base.transaction_id),
                     transaction: crate::db::Transaction {
                         merchant_name: transaction.transaction_base.merchant_name,
-                        description: transaction.transaction_base.original_description,
+                        description_or_merchant_name: transaction.transaction_base.name,
+                        original_description: transaction.transaction_base.original_description,
                         posted_date,
                         authorized_date: transaction.authorized_date,
                         category: transaction.personal_finance_category.map(|category| {
@@ -97,6 +98,13 @@ async fn sync_transactions_page(
                             amount,
                             iso_currency_code: transaction.transaction_base.iso_currency_code,
                         },
+                        check_number: transaction.transaction_base.check_number,
+                        transaction_type: transaction.transaction_base.transaction_type,
+                        associated_website: transaction.transaction_base.website,
+                        location: transaction
+                            .transaction_base
+                            .location
+                            .map(|location| format!("{}", location)),
                     },
                 }))
             }

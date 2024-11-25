@@ -48,12 +48,32 @@ fn transaction_to_beancount<'a>(
     } else {
         transaction.posted_date
     };
+    if let Some(location) = &transaction.location {
+        if location != "{}" {
+            meta.insert(
+                Cow::Borrowed("plaid_location"),
+                MetaValue::Text(Cow::Owned(location.clone())),
+            );
+        }
+    }
+    if let Some(website) = &transaction.associated_website {
+        meta.insert(
+            Cow::Borrowed("plaid_associated_website"),
+            MetaValue::Text(Cow::Borrowed(website)),
+        );
+    }
+    if let Some(check_number) = &transaction.check_number {
+        meta.insert(
+            Cow::Borrowed("plaid_check_number"),
+            MetaValue::Text(Cow::Borrowed(check_number)),
+        );
+    }
     Directive::Transaction(beancount_core::Transaction {
         date: date.into(),
         flag: Flag::Warning,
         payee: transaction.merchant_name.as_deref().map(Cow::Borrowed),
         narration: transaction
-            .description
+            .description_or_merchant_name
             .as_deref()
             .map(Cow::Borrowed)
             .unwrap_or(Cow::Borrowed("")),
