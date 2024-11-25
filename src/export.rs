@@ -25,6 +25,18 @@ fn transaction_to_beancount<'a>(
     transaction_id: &'a TransactionId,
     transaction: &'a Transaction,
 ) -> Directive<'a> {
+    let mut meta = hash_map![
+        Cow::Borrowed("plaid_transaction_id") => MetaValue::Text(Cow::Borrowed(&transaction_id.0)),
+    ];
+    if let Some(category) = &transaction.category {
+        meta.insert(
+            Cow::Borrowed("plaid_category"),
+            MetaValue::Text(Cow::Owned(format!(
+                "{}.{}",
+                category.primary, category.detailed,
+            ))),
+        );
+    }
     Directive::Transaction(beancount_core::Transaction {
         date: transaction.date.into(),
         flag: Flag::Warning,
@@ -49,9 +61,7 @@ fn transaction_to_beancount<'a>(
             cost: None,
             price: None,
             flag: None,
-            meta: hash_map![
-                Cow::Borrowed("plaid_transaction_id") => MetaValue::Text(Cow::Borrowed(&transaction_id.0)),
-            ],
+            meta,
         }],
         meta: hash_map![],
         source: None,
