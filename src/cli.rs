@@ -217,10 +217,12 @@ impl Cli {
     }
 
     pub async fn main_export_transactions(&mut self) -> Result<()> {
-        export_transactions(self.db.bank_connections.iter().flat_map(|c| {
-            c.accounts()
-                .flat_map(|a| a.1.transactions.iter().map(|t| t.1))
-        }))?;
+        export_transactions(
+            self.db
+                .bank_connections
+                .iter()
+                .flat_map(|c| c.accounts().flat_map(|a| a.1.transactions.iter())),
+        )?;
         Ok(())
     }
 }

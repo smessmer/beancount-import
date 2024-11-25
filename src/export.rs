@@ -1,32 +1,40 @@
 use std::{borrow::Cow, io::stdout};
 
 use anyhow::Result;
-use beancount_core::{AccountType, Directive, Flag, IncompleteAmount, Ledger, Posting};
+use beancount_core::{
+    metadata::MetaValue, AccountType, Directive, Flag, IncompleteAmount, Ledger, Posting,
+};
 use common_macros::{hash_map, hash_set};
 
-use crate::db::Transaction;
+use crate::db::{Transaction, TransactionId};
 
-pub fn export_transactions<'a>(transactions: impl Iterator<Item = &'a Transaction>) -> Result<()> {
+pub fn export_transactions<'a>(
+    transactions: impl Iterator<Item = (&'a TransactionId, &'a Transaction)>,
+) -> Result<()> {
     let ledger = Ledger {
-        directives: transactions.map(transaction_to_directive).collect(),
+        directives: transactions
+            .map(|(id, t)| transaction_to_directive(id, t))
+            .collect(),
     };
     beancount_render::render(&mut stdout(), &ledger)?;
     Ok(())
 }
 
-fn transaction_to_directive(transaction: &Transaction) -> Directive {
-    // TODO Should we export the transaction id somehow? maybe as a label, tag or meta?
+fn transaction_to_directive<'a>(
+    transaction_id: &'a TransactionId,
+    transaction: &'a Transaction,
+) -> Directive<'a> {
     Directive::Transaction(beancount_core::Transaction {
         date: transaction.date.into(),
-        flag: Flag::Warning, // TODO What flag?
-        payee: None,         // TODO
+        flag: Flag::Warning,
+        payee: transaction.merchant_name.as_deref().map(Cow::Borrowed),
         narration: transaction
             .description
             .as_deref()
             .map(Cow::Borrowed)
             .unwrap_or(Cow::Borrowed("")),
-        tags: hash_set![],  // TODO
-        links: hash_set![], // TODO
+        tags: hash_set![],
+        links: hash_set![],
         postings: vec![Posting {
             account: beancount_core::Account {
                 ty: AccountType::Assets,                                     // TODO
@@ -40,12 +48,14 @@ fn transaction_to_directive(transaction: &Transaction) -> Directive {
                     .as_deref()
                     .map(Cow::Borrowed),
             },
-            cost: None,        // TODO
-            price: None,       // TODO
-            flag: None,        // TODO
-            meta: hash_map![], // TODO
+            cost: None,
+            price: None,
+            flag: None,
+            meta: hash_map![
+                Cow::Borrowed("plaid_transaction_id") => MetaValue::Text(Cow::Borrowed(&transaction_id.0)),
+            ],
         }],
-        meta: hash_map![], // TODO
-        source: None,      // TODO
+        meta: hash_map![],
+        source: None,
     })
 }
