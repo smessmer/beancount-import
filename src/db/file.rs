@@ -94,13 +94,13 @@ mod tests {
                 "connection-name-1".to_string(),
                 AccessToken::new("access-token-1".to_string()),
                 hash_map![
-                    AccountId("account-1".to_string()) => Account::new(PlaidAccountInfo {
+                    AccountId("account-1".to_string()) => Account::new_connected(PlaidAccountInfo {
                         name: "Account 1".to_string(),
                     }, BeancountAccountInfo{
                         ty: AccountType::Assets,
                         name_parts: vec!["Part1".to_string(), "Part2".to_string()],
                     }), AccountId("account-2".to_string()) =>
-                    Account::new(PlaidAccountInfo {
+                    Account::new_connected(PlaidAccountInfo {
                         name: "Account 2".to_string(),
                     }, BeancountAccountInfo{
                         ty: AccountType::Liabilities,
@@ -117,7 +117,7 @@ mod tests {
             bank_connections: vec![BankConnection::new(
                 "connection-name-1".to_string(),
                 AccessToken::new("access-token-2".to_string()),
-                hash_map![AccountId("account-100".to_string()) => Account::new(PlaidAccountInfo {
+                hash_map![AccountId("account-100".to_string()) => Account::new_connected(PlaidAccountInfo {
                     name: "Account 100".to_string(),
                 }, BeancountAccountInfo{
                     ty: AccountType::Assets,

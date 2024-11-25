@@ -103,11 +103,7 @@ impl Cli {
             .await
             .unwrap();
         let accounts = accounts
-            .filter_map(|(id, account)| {
-                prompt_add_account(id, account)
-                    .map(|v| v.map(Ok))
-                    .unwrap_or_else(|err| Some(Err(err)))
-            })
+            .map(|(id, account)| prompt_add_account(id, account))
             .collect::<Result<_>>()?;
         let connection = BankConnection::new(name, access_token, accounts);
         println!();
@@ -164,35 +160,50 @@ impl Cli {
                         transaction.account_id,
                     )
                 })?;
-            let transaction_id = transaction.transaction_id.clone();
-            let add_or_verify_result = account
-                .add_or_verify_transaction(transaction.transaction_id, transaction.transaction);
-            match add_or_verify_result {
-                AddOrVerifyResult::Added => {
-                    *num_added.get_mut(&transaction.account_id).unwrap() += 1;
+            if let Some(account) = &mut account.account {
+                let transaction_id = transaction.transaction_id.clone();
+                let add_or_verify_result = account
+                    .add_or_verify_transaction(transaction.transaction_id, transaction.transaction);
+                match add_or_verify_result {
+                    AddOrVerifyResult::Added => {
+                        *num_added.get_mut(&transaction.account_id).unwrap() += 1;
+                    }
+                    AddOrVerifyResult::ExistsAndMatches => {
+                        *num_verified.get_mut(&transaction.account_id).unwrap() += 1;
+                    }
+                    AddOrVerifyResult::ExistsAndDoesntMatch => {
+                        bail!("Transaction {transaction_id:?} already exists but doesn't match",);
+                    }
                 }
-                AddOrVerifyResult::ExistsAndMatches => {
-                    *num_verified.get_mut(&transaction.account_id).unwrap() += 1;
-                }
-                AddOrVerifyResult::ExistsAndDoesntMatch => {
-                    bail!("Transaction {transaction_id:?} already exists but doesn't match",);
-                }
+            } else {
+                *num_added.get_mut(&transaction.account_id).unwrap() += 1;
             }
         }
 
         for account in bank_connection.accounts() {
             printer.print_item(style_account(&account.1));
             let printer = printer.indent();
-            printer.print_item(
-                style(format!("Added: {}", num_added.get(&account.0).unwrap())).italic(),
-            );
-            printer.print_item(
-                style(format!(
-                    "Verified: {}",
-                    num_verified.get(&account.0).unwrap()
-                ))
-                .italic(),
-            );
+            if account.1.is_connected() {
+                printer.print_item(
+                    style(format!("Added: {}", num_added.get(&account.0).unwrap())).italic(),
+                );
+                printer.print_item(
+                    style(format!(
+                        "Verified: {}",
+                        num_verified.get(&account.0).unwrap()
+                    ))
+                    .italic(),
+                );
+            } else {
+                printer.print_item(
+                    style(format!(
+                        "Transactions: {}",
+                        num_added.get(&account.0).unwrap()
+                    ))
+                    .italic()
+                    .strikethrough(),
+                );
+            }
         }
 
         Ok(())
@@ -205,15 +216,19 @@ impl Cli {
             printer.print_item(style_connection(connection));
             let printer = printer.indent();
             for account in connection.accounts() {
-                printer.print_item(style_account(&account.1));
-                let printer = printer.indent();
-                let transactions = &account.1.transactions;
-                if transactions.is_empty() {
-                    printer.print_item(style("(none)").italic());
-                } else {
-                    for transaction in account.1.transactions.iter() {
-                        print_transaction(&printer, transaction.1);
+                if let Some(connected_account) = &account.1.account {
+                    printer.print_item(style_account(account.1));
+                    let printer = printer.indent();
+                    let transactions = &connected_account.transactions;
+                    if transactions.is_empty() {
+                        printer.print_item(style("(none)").italic());
+                    } else {
+                        for transaction in connected_account.transactions.iter() {
+                            print_transaction(&printer, transaction.1);
+                        }
                     }
+                } else {
+                    printer.print_item(style_account(&account.1).strikethrough());
                 }
             }
         }
@@ -221,12 +236,13 @@ impl Cli {
     }
 
     pub async fn main_export_transactions(&mut self) -> Result<()> {
-        export_transactions(
-            self.db
-                .bank_connections
-                .iter()
-                .flat_map(|c| c.accounts().flat_map(|a| a.1.transactions.iter())),
-        )?;
+        export_transactions(self.db.bank_connections.iter().flat_map(|c| {
+            c.accounts().flat_map(|a| {
+                a.1.account
+                    .iter()
+                    .flat_map(|account| account.transactions.iter())
+            })
+        }))?;
         Ok(())
     }
 }
@@ -234,16 +250,16 @@ impl Cli {
 fn prompt_add_account(
     account_id: AccountId,
     plaid_account_info: PlaidAccountInfo,
-) -> Result<Option<(AccountId, Account)>> {
+) -> Result<(AccountId, Account)> {
     let prompt = format!("Add account {}", plaid_account_info.name);
     if terminal::prompt_yes_no(&prompt)? {
         let beancount_account_info = prompt_beancount_account_info()?;
-        Ok(Some((
+        Ok((
             account_id,
-            Account::new(plaid_account_info, beancount_account_info),
-        )))
+            Account::new_connected(plaid_account_info, beancount_account_info),
+        ))
     } else {
-        Ok(None)
+        Ok((account_id, Account::new_unconnected(plaid_account_info)))
     }
 }
 
@@ -341,16 +357,26 @@ fn style_connection(connection: &BankConnection) -> StyledObject<&str> {
 }
 
 fn style_account(account: &Account) -> StyledObject<String> {
-    style(format!(
-        "{} {}",
-        account.plaid_account_info.name,
+    if let Some(connected_account) = &account.account {
         style(format!(
-            "[{}]",
-            account.beancount_account_info.beancount_name()
+            "{} {}",
+            account.plaid_account_info.name,
+            style(format!(
+                "[{}]",
+                connected_account.beancount_account_info.beancount_name()
+            ))
+            .italic(),
         ))
-        .italic(),
-    ))
-    .magenta()
+        .magenta()
+    } else {
+        style(format!(
+            "{} {}",
+            account.plaid_account_info.name,
+            style(format!("[account not connected]")).italic(),
+        ))
+        .magenta()
+        .strikethrough()
+    }
 }
 
 fn style_transaction(transaction: &str) -> StyledObject<&str> {
