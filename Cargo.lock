@@ -208,10 +208,22 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "9d297deb1925b89f2ccc13d7635fa0714f12c87adce1c75356b39ca9b7178567"
 
 [[package]]
+name = "beancount-core"
+version = "0.2.0"
+source = "git+https://github.com/smessmer/beancount#3ce290695c5f96794e0f3677a9b70d0a3cfbf7a3"
+dependencies = [
+ "chrono",
+ "rust_decimal",
+ "typed-builder",
+]
+
+[[package]]
 name = "beancount-plaid"
 version = "0.1.0"
 dependencies = [
  "anyhow",
+ "beancount-core",
+ "beancount-render",
  "chacha20poly1305",
  "chrono",
  "clap",
@@ -233,6 +245,15 @@ dependencies = [
  "tempfile",
  "tokio",
  "zstd",
+]
+
+[[package]]
+name = "beancount-render"
+version = "0.1.0"
+source = "git+https://github.com/smessmer/beancount#3ce290695c5f96794e0f3677a9b70d0a3cfbf7a3"
+dependencies = [
+ "beancount-core",
+ "thiserror",
 ]
 
 [[package]]
@@ -2434,6 +2455,17 @@ name = "try-lock"
 version = "0.2.5"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "e421abadd41a4225275504ea4d6566923418b7f05506fbc9c0fe86ba7396114b"
+
+[[package]]
+name = "typed-builder"
+version = "0.7.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "f85f4270f4f449a3f2c0cf2aecc8415e388a597aeacc7d55fc749c5c968c8533"
+dependencies = [
+ "proc-macro2",
+ "quote",
+ "syn 1.0.109",
+]
 
 [[package]]
 name = "typenum"

@@ -24,6 +24,8 @@ console = "0.15.8"
 rust_decimal = "1.36.0"
 common_macros = "0.1.1"
 zstd = "0.13.2"
+beancount-core = {git = "https://github.com/smessmer/beancount", version = "0.2.0", features = ["chrono"]}
+beancount-render = {git = "https://github.com/smessmer/beancount", version = "0.1.0"}
 
 [dev-dependencies]
 hex = "0.4.3"

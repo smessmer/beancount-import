@@ -7,6 +7,7 @@ use std::path::Path;
 
 use crate::args::{Args, Command};
 use crate::db::{Account, AccountId, AccountInfo, AddOrVerifyResult, Amount, Transaction};
+use crate::export::export_transactions;
 use crate::terminal::{self, BulletPointPrinter};
 
 use super::db::{self, BankConnection, Cipher, DatabaseV1, DbPlaidAuth, XChaCha20Poly1305Cipher};
@@ -34,6 +35,7 @@ pub async fn main(args: Args) -> Result<()> {
         Command::ListConnections => cli.main_list_connections().await?,
         Command::Sync => cli.main_sync().await?,
         Command::ListTransactions => cli.main_list_transactions().await?,
+        Command::Export => cli.main_export_transactions().await?,
     }
     cli.save_db().await?;
     Ok(())
@@ -211,6 +213,14 @@ impl Cli {
                 }
             }
         }
+        Ok(())
+    }
+
+    pub async fn main_export_transactions(&mut self) -> Result<()> {
+        export_transactions(self.db.bank_connections.iter().flat_map(|c| {
+            c.accounts()
+                .flat_map(|a| a.1.transactions.iter().map(|t| t.1))
+        }))?;
         Ok(())
     }
 }

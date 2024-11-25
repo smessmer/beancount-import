@@ -23,6 +23,9 @@ pub enum Command {
 
     /// Print the list of transactions in the database
     ListTransactions,
+
+    /// Export transactions from the database to a Beancount file
+    Export,
 }
 
 pub fn parse() -> Args {
