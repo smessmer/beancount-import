@@ -78,14 +78,15 @@ async fn sync_transactions_page(
                         )))
                     }
                 };
-                let date = transaction.authorized_date.unwrap_or(transaction.date);
+                let posted_date = transaction.date;
                 Some(Ok(TransactionWithAccount {
                     account_id: AccountId::new(transaction.transaction_base.account_id),
                     transaction_id: TransactionId(transaction.transaction_base.transaction_id),
                     transaction: crate::db::Transaction {
                         merchant_name: transaction.transaction_base.merchant_name,
                         description: transaction.transaction_base.original_description,
-                        date,
+                        posted_date,
+                        authorized_date: transaction.authorized_date,
                         category: transaction.personal_finance_category.map(|category| {
                             TransactionCategory {
                                 primary: category.primary,

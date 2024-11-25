@@ -96,7 +96,8 @@ impl Debug for TransactionCategory {
 pub struct Transaction {
     pub merchant_name: Option<String>,
     pub description: Option<String>,
-    pub date: NaiveDate,
+    pub posted_date: NaiveDate,
+    pub authorized_date: Option<NaiveDate>,
     pub category: Option<TransactionCategory>,
     pub amount: Amount,
 }

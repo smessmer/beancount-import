@@ -333,14 +333,18 @@ fn print_transaction(printer: &BulletPointPrinter, transaction: &Transaction) {
         .as_ref()
         .map(|cat| format!(" [{}.{}]", cat.primary, cat.detailed))
         .unwrap_or_else(|| "".to_string());
+    let date = if let Some(authorized_date) = transaction.authorized_date {
+        format!(
+            "{} (posted: {})",
+            authorized_date.format("%Y-%m-%d"),
+            transaction.posted_date.format("%Y-%m-%d")
+        )
+    } else {
+        transaction.posted_date.format("%Y-%m-%d").to_string()
+    };
     printer.print_item(style_transaction(&format!(
         "{} {}{}{}{}",
-        pad_str(
-            &style_date(&transaction.date).to_string(),
-            10,
-            Alignment::Left,
-            None
-        ),
+        pad_str(&style_date(&date).to_string(), 10, Alignment::Left, None),
         pad_str(
             &style_amount(&transaction.amount).to_string(),
             15,
@@ -388,8 +392,8 @@ fn style_transaction(transaction: &str) -> StyledObject<&str> {
     style(transaction).italic()
 }
 
-fn style_date(date: &chrono::NaiveDate) -> StyledObject<String> {
-    style(date.format("%Y-%m-%d").to_string())
+fn style_date(date: &str) -> StyledObject<&str> {
+    style(date)
 }
 
 fn style_amount(amount: &Amount) -> StyledObject<String> {
