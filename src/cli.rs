@@ -158,6 +158,9 @@ impl Cli {
                 ))
             })
             .collect();
+        let mut total_num_added = 0;
+        let mut total_num_verified = 0;
+        let mut total_num_ignored = 0;
         while let Some(sync_result) = sync_results.next().await {
             let (connection, sync_result) = sync_result?;
             printer.print_item(style_connection(connection));
@@ -172,14 +175,34 @@ impl Cli {
                     printer.print_item(
                         style(format!("Verified: {}", sync_result.num_verified)).italic(),
                     );
+                    total_num_added += sync_result.num_added;
+                    total_num_verified += sync_result.num_verified;
                 } else {
                     printer.print_item(
-                        style(format!("Transactions: {}", sync_result.num_added))
+                        style(format!("Ignored: {}", sync_result.num_added))
                             .italic()
                             .strikethrough(),
                     );
+                    total_num_ignored += sync_result.num_added;
                 }
             }
+        }
+        progress.clear()?;
+        println!();
+        println!();
+        println!("{}", style_header("Totals:"));
+        println!("{}", style(format!("Added: {}", total_num_added)).italic());
+        println!(
+            "{}",
+            style(format!("Verified: {}", total_num_verified)).italic()
+        );
+        if total_num_ignored > 0 {
+            println!(
+                "{}",
+                style(format!("Ignored: {}", total_num_ignored))
+                    .italic()
+                    .strikethrough()
+            );
         }
         Ok(())
     }
