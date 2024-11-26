@@ -28,7 +28,7 @@ pub async fn get_accounts(
                             subtype
                         )),
                     })
-                    .map_or(Ok(None), |v| v.map(Some))?,
+                    .transpose()?,
             },
         ))
     });
