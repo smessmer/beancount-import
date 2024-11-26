@@ -334,11 +334,15 @@ fn print_transaction(printer: &BulletPointPrinter, transaction: &Transaction) {
         .map(|cat| format!(" [{}.{}]", cat.primary, cat.detailed))
         .unwrap_or_else(|| "".to_string());
     let date = if let Some(authorized_date) = transaction.authorized_date {
-        format!(
-            "{} (posted: {})",
-            authorized_date.format("%Y-%m-%d"),
-            transaction.posted_date.format("%Y-%m-%d")
-        )
+        if authorized_date != transaction.posted_date {
+            format!(
+                "{} (posted: {})",
+                authorized_date.format("%Y-%m-%d"),
+                transaction.posted_date.format("%Y-%m-%d")
+            )
+        } else {
+            transaction.posted_date.format("%Y-%m-%d").to_string()
+        }
     } else {
         transaction.posted_date.format("%Y-%m-%d").to_string()
     };
@@ -356,11 +360,10 @@ fn print_transaction(printer: &BulletPointPrinter, transaction: &Transaction) {
         style_category(&category),
     )));
     let printer = printer.indent();
-    if let Some(transaction_type) = &transaction.transaction_type {
-        printer.print_item(style(format!("Type: {}", transaction_type)).dim());
-    }
     if let Some(location) = &transaction.location {
-        printer.print_item(style(format!("Location: {}", location)).dim());
+        if location != "{}" {
+            printer.print_item(style(format!("Location: {}", location)).dim());
+        }
     }
     if let Some(website) = &transaction.associated_website {
         printer.print_item(style(format!("Website: {}", website)).dim());

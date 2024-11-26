@@ -40,10 +40,12 @@ fn transaction_to_beancount<'a>(
     let date = if let Some(authorized_date) = transaction.authorized_date {
         // Transaction has both a posted and an authorized date. Let's report the authorized date
         // as the transaction date, but add metadata with the posted date.
-        meta.insert(
-            Cow::Borrowed("posted_date"),
-            MetaValue::Date(transaction.posted_date.into()),
-        );
+        if transaction.posted_date != authorized_date {
+            meta.insert(
+                Cow::Borrowed("posted_date"),
+                MetaValue::Date(transaction.posted_date.into()),
+            );
+        }
         authorized_date
     } else {
         transaction.posted_date
