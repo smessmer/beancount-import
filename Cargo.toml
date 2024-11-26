@@ -26,6 +26,7 @@ common_macros = "0.1.1"
 zstd = "0.13.2"
 beancount-core = {git = "https://github.com/smessmer/beancount", version = "0.2.0", features = ["chrono"]}
 beancount-render = {git = "https://github.com/smessmer/beancount", version = "0.1.0"}
+serde_json = "1.0.133"
 
 [dev-dependencies]
 hex = "0.4.3"

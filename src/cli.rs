@@ -103,8 +103,14 @@ impl Cli {
         let accounts = plaid_api::get_accounts(&self.plaid_api, &access_token)
             .await
             .unwrap();
+        println!();
+        println!("Found {} accounts", accounts.len());
         let accounts = accounts
-            .map(|(id, account)| prompt_add_account(id, account))
+            .enumerate()
+            .map(|(index, account)| {
+                let (id, account) = account?;
+                Ok(prompt_add_account(index, id, account)?)
+            })
             .collect::<Result<_>>()?;
         let connection = BankConnection::new(name, access_token, accounts);
         println!();
@@ -277,10 +283,13 @@ impl Cli {
 }
 
 fn prompt_add_account(
+    index: usize,
     account_id: AccountId,
     plaid_account_info: PlaidAccountInfo,
 ) -> Result<(AccountId, Account)> {
-    let prompt = format!("Add account {}", plaid_account_info.name);
+    print_found_account(index, &plaid_account_info);
+    println!();
+    let prompt = "Add account";
     if terminal::prompt_yes_no(&prompt)? {
         let beancount_account_info = prompt_beancount_account_info()?;
         Ok((
@@ -289,6 +298,28 @@ fn prompt_add_account(
         ))
     } else {
         Ok((account_id, Account::new_unconnected(plaid_account_info)))
+    }
+}
+
+fn print_found_account(index: usize, plaid_account_info: &PlaidAccountInfo) {
+    println!();
+    println!("{}", style_header(&format!("Account {}:", index + 1)));
+    print!("{}", style("Account name: ").bold());
+    print!("{}", style(&plaid_account_info.name).magenta());
+    if let Some(official_name) = &plaid_account_info.official_name {
+        if *official_name != plaid_account_info.name {
+            print!(" ({})", style(official_name).magenta());
+        }
+    }
+    println!();
+    if let Some(mask) = &plaid_account_info.mask {
+        print!("{}", style("Account number: ").bold());
+        println!("{}", style_mask(mask));
+    }
+    print!("{}", style("Type: ").bold());
+    print!("{}", style(&plaid_account_info.type_).cyan());
+    if let Some(subtype) = &plaid_account_info.subtype {
+        println!(" / {}", style(subtype).cyan());
     }
 }
 
@@ -422,10 +453,15 @@ fn style_connection(connection: &BankConnection) -> StyledObject<&str> {
 }
 
 fn style_account(account: &Account) -> StyledObject<String> {
+    let mut account_info = account.plaid_account_info.name.clone();
+    if let Some(mask) = &account.plaid_account_info.mask {
+        account_info.push_str(" ");
+        account_info.push_str(&style_mask(&mask).to_string());
+    }
     if let Some(connected_account) = &account.account {
         style(format!(
             "{} {}",
-            account.plaid_account_info.name,
+            account_info,
             style(format!(
                 "[{}]",
                 connected_account.beancount_account_info.beancount_name()
@@ -436,7 +472,7 @@ fn style_account(account: &Account) -> StyledObject<String> {
     } else {
         style(format!(
             "{} {}",
-            account.plaid_account_info.name,
+            account_info,
             style(format!("[account not connected]")).italic(),
         ))
         .magenta()
@@ -476,4 +512,8 @@ fn style_merchant_name(merchant_name: &str) -> StyledObject<&str> {
 
 fn style_category(category: &str) -> StyledObject<&str> {
     style(category).magenta()
+}
+
+fn style_mask(mask: &str) -> StyledObject<String> {
+    style(format!("***{mask}")).italic()
 }

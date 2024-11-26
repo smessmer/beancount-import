@@ -15,6 +15,11 @@ impl AccountId {
 #[cfg_attr(test, derive(PartialEq, Eq))]
 pub struct PlaidAccountInfo {
     pub name: String,
+    pub official_name: Option<String>,
+    /// e.g. the last 4 digits of the account number.
+    pub mask: Option<String>,
+    pub type_: String,
+    pub subtype: Option<String>,
 }
 
 #[derive(Serialize, Deserialize, Debug, Clone)]
