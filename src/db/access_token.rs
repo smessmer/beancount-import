@@ -1,7 +1,7 @@
 use serde::{Deserialize, Serialize};
+use std::fmt::{Debug, Formatter};
 
-// TODO Overwrite Debug for security since the token is a secret
-#[derive(Serialize, Deserialize, Debug, Clone)]
+#[derive(Serialize, Deserialize, Clone)]
 #[cfg_attr(test, derive(PartialEq, Eq))]
 pub struct AccessToken {
     access_token: String,
@@ -14,5 +14,11 @@ impl AccessToken {
 
     pub fn get(&self) -> &str {
         &self.access_token
+    }
+}
+
+impl Debug for AccessToken {
+    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+        write!(f, "AccessToken(*****)")
     }
 }
