@@ -11,7 +11,7 @@ use crate::db::{
     PlaidAccountInfo, Transaction,
 };
 use crate::export::export_transactions;
-use crate::terminal::{self, BulletPointPrinter};
+use crate::terminal::{self, BulletPointPrinter, LineWriter};
 
 use super::db::{self, BankConnection, Cipher, DatabaseV1, DbPlaidAuth, XChaCha20Poly1305Cipher};
 use super::plaid_api;
@@ -115,7 +115,7 @@ impl Cli {
         let connection = BankConnection::new(name, access_token, accounts);
         println!();
         println!("{}", style_header("Adding connection:"));
-        print_connection(&BulletPointPrinter::new(), &connection);
+        print_connection(&BulletPointPrinter::new_stdout(), &connection);
         self.db.bank_connections.push(connection);
         Ok(())
     }
@@ -125,7 +125,7 @@ impl Cli {
         if self.db.bank_connections.is_empty() {
             println!("(none)");
         } else {
-            let printer = BulletPointPrinter::new();
+            let printer = BulletPointPrinter::new_stdout();
             for connection in &self.db.bank_connections {
                 print_connection(&printer, connection);
             }
@@ -135,7 +135,7 @@ impl Cli {
 
     pub async fn main_sync(&mut self) -> Result<()> {
         println!("{}", style_header("Syncing connections:"));
-        let printer = BulletPointPrinter::new();
+        let printer = BulletPointPrinter::new_stdout();
         for connection in &mut self.db.bank_connections {
             Self::sync_connection(&self.plaid_api, connection, &printer).await?;
         }
@@ -145,7 +145,7 @@ impl Cli {
     async fn sync_connection(
         plaid_api: &plaid_api::Plaid,
         bank_connection: &mut BankConnection,
-        printer: &BulletPointPrinter,
+        printer: &BulletPointPrinter<impl LineWriter + Clone>,
     ) -> Result<()> {
         printer.print_item(style_connection(bank_connection));
         let printer = printer.indent();
@@ -218,7 +218,7 @@ impl Cli {
 
     pub async fn main_list_transactions(&mut self) -> Result<()> {
         println!("{}", style_header("Transactions:"));
-        let printer = BulletPointPrinter::new();
+        let printer = BulletPointPrinter::new_stdout();
         for connection in &self.db.bank_connections {
             printer.print_item(style_connection(connection));
             let printer = printer.indent();
@@ -358,7 +358,7 @@ fn parse_beancount_account_info(name: &str) -> Result<BeancountAccountInfo, &'st
 }
 
 fn print_accounts<'a, 'b>(
-    printer: &BulletPointPrinter,
+    printer: &BulletPointPrinter<impl LineWriter + Clone>,
     accounts: impl Iterator<Item = (&'a AccountId, &'b Account)>,
 ) {
     for account in accounts {
@@ -366,12 +366,18 @@ fn print_accounts<'a, 'b>(
     }
 }
 
-fn print_connection(printer: &BulletPointPrinter, connection: &BankConnection) {
+fn print_connection(
+    printer: &BulletPointPrinter<impl LineWriter + Clone>,
+    connection: &BankConnection,
+) {
     printer.print_item(style_connection(connection));
     print_accounts(&printer.indent(), connection.accounts());
 }
 
-fn print_transaction(printer: &BulletPointPrinter, transaction: &Transaction) {
+fn print_transaction(
+    printer: &BulletPointPrinter<impl LineWriter + Clone>,
+    transaction: &Transaction,
+) {
     let transaction_description = transaction
         .transaction
         .original_description
