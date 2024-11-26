@@ -51,9 +51,11 @@ async fn sync_transactions_page(
         .client()
         .transactions_sync(access_token.get())
         .options(TransactionsSyncRequestOptions {
-            include_original_description: Some(true), // TODO Are we actually using this?
+            include_original_description: Some(true),
+            // days_requested: Some(730), // This is specified in the link token create flow, not here.
             ..Default::default()
-        });
+        })
+        .count(500); // 500 is the max page size allowed by the Plaid API
     if let Some(cursor) = cursor {
         request = request.cursor(&cursor);
     }

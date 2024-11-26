@@ -1,5 +1,8 @@
 use anyhow::Result;
-use plaid::{model::LinkTokenCreateRequestUser, request::LinkTokenCreateRequired};
+use plaid::{
+    model::{LinkTokenCreateRequestUser, LinkTokenTransactions},
+    request::LinkTokenCreateRequired,
+};
 
 use crate::{db::AccessToken, plaid_api::Plaid};
 
@@ -43,6 +46,9 @@ pub async fn link_token_create(client: &Plaid) -> Result<LinkToken> {
             },
         })
         .products(PRODUCTS)
+        .transactions(LinkTokenTransactions {
+            days_requested: Some(730), // Ask for access to 730 days of transaction history. This is the maximum allowed by the Plaid API.
+        })
         .await?;
     Ok(LinkToken(response.link_token))
 }
