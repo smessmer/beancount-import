@@ -384,6 +384,7 @@ fn print_transaction(printer: &BulletPointPrinter, transaction: &Transaction) {
         .as_ref()
         .map(|name| format!(" {name}"))
         .unwrap_or_else(|| "".to_string());
+    // TODO Use plaid_categories.csv (it's in the repo, this is the official list from plaid) to display categories
     let category = transaction
         .transaction
         .category
