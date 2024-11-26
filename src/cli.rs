@@ -38,7 +38,8 @@ pub async fn main(args: Args) -> Result<()> {
         Command::ListConnections => cli.main_list_connections().await?,
         Command::Sync => cli.main_sync().await?,
         Command::ListTransactions => cli.main_list_transactions().await?,
-        Command::Export => cli.main_export_transactions().await?,
+        Command::ExportAll => cli.main_export_all_transactions().await?,
+        Command::ExportNew => cli.main_export_new_transactions().await?,
     }
     cli.save_db().await?;
     Ok(())
@@ -223,8 +224,8 @@ impl Cli {
                     if transactions.is_empty() {
                         printer.print_item(style("(none)").italic());
                     } else {
-                        for transaction in connected_account.transactions.iter() {
-                            print_transaction(&printer, transaction.1);
+                        for transaction in connected_account.transactions.iter_all() {
+                            print_transaction(&printer, &transaction.1);
                         }
                     }
                 } else {
@@ -235,19 +236,42 @@ impl Cli {
         Ok(())
     }
 
-    pub async fn main_export_transactions(&mut self) -> Result<()> {
-        export_transactions(self.db.bank_connections.iter().flat_map(|c| {
+    pub async fn main_export_all_transactions(&mut self) -> Result<()> {
+        let all_transactions = self.db.bank_connections.iter().flat_map(|c| {
             c.accounts().flat_map(|account| {
                 account.1.account.iter().flat_map(|account| {
                     account
                         .transactions
-                        .iter()
+                        .iter_all()
                         .map(move |(transaction_id, transaction)| {
-                            (account, transaction_id, transaction)
+                            (&account.beancount_account_info, transaction_id, transaction)
                         })
                 })
             })
-        }))?;
+        });
+        export_transactions(all_transactions)?;
+        Ok(())
+    }
+
+    pub async fn main_export_new_transactions(&mut self) -> Result<()> {
+        let new_transactions = self.db.bank_connections.iter_mut().flat_map(|c| {
+            c.accounts_mut().flat_map(|account| {
+                account.1.account.iter_mut().flat_map(|account| {
+                    account
+                        .transactions
+                        .iter_new_mut()
+                        .map(|(transaction_id, transaction)| {
+                            transaction.mark_as_exported();
+                            (
+                                &account.beancount_account_info,
+                                transaction_id,
+                                &*transaction,
+                            )
+                        })
+                })
+            })
+        });
+        export_transactions(new_transactions)?;
         Ok(())
     }
 }
@@ -319,38 +343,49 @@ fn print_connection(printer: &BulletPointPrinter, connection: &BankConnection) {
 
 fn print_transaction(printer: &BulletPointPrinter, transaction: &Transaction) {
     let transaction_description = transaction
+        .transaction
         .original_description
         .as_ref()
         .map(|desc| format!(" \"{desc}\""))
         .unwrap_or_else(|| "".to_string());
     let merchant_name = transaction
+        .transaction
         .merchant_name
         .as_ref()
         .map(|name| format!(" {name}"))
         .unwrap_or_else(|| "".to_string());
     let category = transaction
+        .transaction
         .category
         .as_ref()
         .map(|cat| format!(" [{}.{}]", cat.primary, cat.detailed))
         .unwrap_or_else(|| "".to_string());
-    let date = if let Some(authorized_date) = transaction.authorized_date {
-        if authorized_date != transaction.posted_date {
+    let date = if let Some(authorized_date) = transaction.transaction.authorized_date {
+        if authorized_date != transaction.transaction.posted_date {
             format!(
                 "{} (posted: {})",
                 authorized_date.format("%Y-%m-%d"),
-                transaction.posted_date.format("%Y-%m-%d")
+                transaction.transaction.posted_date.format("%Y-%m-%d")
             )
         } else {
-            transaction.posted_date.format("%Y-%m-%d").to_string()
+            transaction
+                .transaction
+                .posted_date
+                .format("%Y-%m-%d")
+                .to_string()
         }
     } else {
-        transaction.posted_date.format("%Y-%m-%d").to_string()
+        transaction
+            .transaction
+            .posted_date
+            .format("%Y-%m-%d")
+            .to_string()
     };
     printer.print_item(style_transaction(&format!(
-        "{} {}{}{}{}",
+        "{} {}{}{}{} {}",
         pad_str(&style_date(&date).to_string(), 10, Alignment::Left, None),
         pad_str(
-            &style_amount(&transaction.amount).to_string(),
+            &style_amount(&transaction.transaction.amount).to_string(),
             15,
             Alignment::Right,
             None
@@ -358,17 +393,22 @@ fn print_transaction(printer: &BulletPointPrinter, transaction: &Transaction) {
         style_transaction_description(&transaction_description),
         style_merchant_name(&merchant_name),
         style_category(&category),
+        if transaction.already_exported {
+            style("[exported]").dim()
+        } else {
+            style("[new]").dim()
+        },
     )));
     let printer = printer.indent();
-    if let Some(location) = &transaction.location {
+    if let Some(location) = &transaction.transaction.location {
         if location != "{}" {
             printer.print_item(style(format!("Location: {}", location)).dim());
         }
     }
-    if let Some(website) = &transaction.associated_website {
+    if let Some(website) = &transaction.transaction.associated_website {
         printer.print_item(style(format!("Website: {}", website)).dim());
     }
-    if let Some(check_number) = &transaction.check_number {
+    if let Some(check_number) = &transaction.transaction.check_number {
         printer.print_item(style(format!("Check number: {}", check_number)).dim());
     }
 }

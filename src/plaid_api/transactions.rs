@@ -82,7 +82,7 @@ async fn sync_transactions_page(
                 Some(Ok(TransactionWithAccount {
                     account_id: AccountId::new(transaction.transaction_base.account_id),
                     transaction_id: TransactionId(transaction.transaction_base.transaction_id),
-                    transaction: crate::db::Transaction {
+                    transaction: crate::db::Transaction::new(crate::db::TransactionInfo {
                         merchant_name: transaction.transaction_base.merchant_name,
                         description_or_merchant_name: transaction.transaction_base.name,
                         original_description: transaction.transaction_base.original_description,
@@ -105,7 +105,7 @@ async fn sync_transactions_page(
                             .transaction_base
                             .location
                             .map(|location| format!("{}", location)),
-                    },
+                    }),
                 }))
             }
         })

@@ -4,18 +4,19 @@ use anyhow::Result;
 use beancount_core::{metadata::MetaValue, Directive, Flag, IncompleteAmount, Ledger, Posting};
 use common_macros::{hash_map, hash_set};
 
-use crate::db::{AccountType, BeancountAccountInfo, ConnectedAccount, Transaction, TransactionId};
+use crate::db::{AccountType, BeancountAccountInfo, Transaction, TransactionId, TransactionInfo};
 
 pub fn export_transactions<'a>(
-    transactions: impl Iterator<Item = (&'a ConnectedAccount, &'a TransactionId, &'a Transaction)>,
+    transactions: impl Iterator<Item = (&'a BeancountAccountInfo, &'a TransactionId, &'a Transaction)>,
 ) -> Result<()> {
     let ledger = Ledger {
         directives: transactions
-            .map(|(account, id, t)| {
-                transaction_to_beancount(&account.beancount_account_info, id, t)
-            })
+            .map(|(account, id, t)| transaction_to_beancount(account, id, &t.transaction))
             .collect(),
     };
+    if ledger.directives.is_empty() {
+        println!("No transactions to export");
+    }
     beancount_render::render(&mut stdout(), &ledger)?;
     Ok(())
 }
@@ -23,7 +24,7 @@ pub fn export_transactions<'a>(
 fn transaction_to_beancount<'a>(
     account: &'a BeancountAccountInfo,
     transaction_id: &'a TransactionId,
-    transaction: &'a Transaction,
+    transaction: &'a TransactionInfo,
 ) -> Directive<'a> {
     let mut meta = hash_map![
         Cow::Borrowed("plaid_transaction_id") => MetaValue::Text(Cow::Borrowed(&transaction_id.0)),

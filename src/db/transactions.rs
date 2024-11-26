@@ -47,8 +47,14 @@ impl Transactions {
         }
     }
 
-    pub fn iter(&self) -> impl Iterator<Item = (&TransactionId, &Transaction)> {
+    pub fn iter_all(&self) -> impl Iterator<Item = (&TransactionId, &Transaction)> {
         self.transactions.iter()
+    }
+
+    pub fn iter_new_mut(&mut self) -> impl Iterator<Item = (&TransactionId, &mut Transaction)> {
+        self.transactions
+            .iter_mut()
+            .filter(|(_, t)| !t.already_exported)
     }
 
     pub fn is_empty(&self) -> bool {
@@ -94,6 +100,25 @@ impl Debug for TransactionCategory {
 
 #[derive(Serialize, Deserialize, Debug, Clone, PartialEq, Eq)]
 pub struct Transaction {
+    pub transaction: TransactionInfo,
+    pub already_exported: bool,
+}
+
+impl Transaction {
+    pub fn new(transaction: TransactionInfo) -> Self {
+        Self {
+            transaction,
+            already_exported: false,
+        }
+    }
+
+    pub fn mark_as_exported(&mut self) {
+        self.already_exported = true;
+    }
+}
+
+#[derive(Serialize, Deserialize, Debug, Clone, PartialEq, Eq)]
+pub struct TransactionInfo {
     pub posted_date: NaiveDate,
     pub authorized_date: Option<NaiveDate>,
     pub category: Option<TransactionCategory>,

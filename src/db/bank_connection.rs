@@ -37,6 +37,10 @@ impl BankConnection {
         self.accounts.iter()
     }
 
+    pub fn accounts_mut(&mut self) -> impl Iterator<Item = (&AccountId, &mut Account)> {
+        self.accounts.iter_mut()
+    }
+
     pub fn account_mut(&mut self, account_id: &AccountId) -> Option<&mut Account> {
         self.accounts.get_mut(account_id)
     }

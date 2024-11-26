@@ -16,14 +16,13 @@ pub enum Database {
 }
 
 pub use access_token::AccessToken;
-pub use account::{
-    Account, AccountId, AccountType, BeancountAccountInfo, ConnectedAccount, PlaidAccountInfo,
-};
+pub use account::{Account, AccountId, AccountType, BeancountAccountInfo, PlaidAccountInfo};
 pub use bank_connection::BankConnection;
 pub use crypto::{Cipher, XChaCha20Poly1305Cipher};
 pub use database::DatabaseV1;
 pub use file::{load, save};
 pub use plaid_auth::DbPlaidAuth;
 pub use transactions::{
-    AddOrVerifyResult, Amount, Transaction, TransactionCategory, TransactionId, Transactions,
+    AddOrVerifyResult, Amount, Transaction, TransactionCategory, TransactionId, TransactionInfo,
+    Transactions,
 };
