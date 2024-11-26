@@ -230,7 +230,8 @@ impl Cli {
                     if transactions.is_empty() {
                         printer.print_item(style("(none)").italic());
                     } else {
-                        for transaction in connected_account.transactions.iter_all() {
+                        for transaction in connected_account.transactions.iter_all_sorted_by_date()
+                        {
                             print_transaction(&printer, &transaction.1);
                         }
                     }
@@ -246,12 +247,11 @@ impl Cli {
         let all_transactions = self.db.bank_connections.iter().flat_map(|c| {
             c.accounts().flat_map(|account| {
                 account.1.account.iter().flat_map(|account| {
-                    account
-                        .transactions
-                        .iter_all()
-                        .map(move |(transaction_id, transaction)| {
+                    account.transactions.iter_all_sorted_by_date().map(
+                        move |(transaction_id, transaction)| {
                             (&account.beancount_account_info, transaction_id, transaction)
-                        })
+                        },
+                    )
                 })
             })
         });
@@ -263,17 +263,16 @@ impl Cli {
         let new_transactions = self.db.bank_connections.iter_mut().flat_map(|c| {
             c.accounts_mut().flat_map(|account| {
                 account.1.account.iter_mut().flat_map(|account| {
-                    account
-                        .transactions
-                        .iter_new_mut()
-                        .map(|(transaction_id, transaction)| {
+                    account.transactions.iter_new_sorted_by_date_mut().map(
+                        |(transaction_id, transaction)| {
                             transaction.mark_as_exported();
                             (
                                 &account.beancount_account_info,
                                 transaction_id,
                                 &*transaction,
                             )
-                        })
+                        },
+                    )
                 })
             })
         });

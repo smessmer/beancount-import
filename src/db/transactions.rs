@@ -47,19 +47,39 @@ impl Transactions {
         }
     }
 
-    pub fn iter_all(&self) -> impl Iterator<Item = (&TransactionId, &Transaction)> {
-        self.transactions.iter()
+    pub fn iter_all_sorted_by_date(&self) -> impl Iterator<Item = (&TransactionId, &Transaction)> {
+        sorted_by_date(self.transactions.iter())
     }
 
-    pub fn iter_new_mut(&mut self) -> impl Iterator<Item = (&TransactionId, &mut Transaction)> {
-        self.transactions
-            .iter_mut()
-            .filter(|(_, t)| !t.already_exported)
+    pub fn iter_new_sorted_by_date_mut(
+        &mut self,
+    ) -> impl Iterator<Item = (&TransactionId, &mut Transaction)> {
+        sorted_by_date_mut(
+            self.transactions
+                .iter_mut()
+                .filter(|(_, t)| !t.already_exported),
+        )
     }
 
     pub fn is_empty(&self) -> bool {
         self.transactions.is_empty()
     }
+}
+
+fn sorted_by_date<'a, 'b>(
+    transactions: impl Iterator<Item = (&'a TransactionId, &'b Transaction)>,
+) -> impl Iterator<Item = (&'a TransactionId, &'b Transaction)> {
+    let mut transactions: Vec<(&TransactionId, &Transaction)> = transactions.collect();
+    transactions.sort_by_key(|(_, t)| t.transaction.date());
+    transactions.into_iter()
+}
+
+fn sorted_by_date_mut<'a, 'b>(
+    transactions: impl Iterator<Item = (&'a TransactionId, &'b mut Transaction)>,
+) -> impl Iterator<Item = (&'a TransactionId, &'b mut Transaction)> {
+    let mut transactions: Vec<(&TransactionId, &mut Transaction)> = transactions.collect();
+    transactions.sort_by_key(|(_, t)| t.transaction.date());
+    transactions.into_iter()
 }
 
 #[derive(Serialize, Deserialize, Clone, Debug, PartialEq, Eq, Hash)]
@@ -130,4 +150,11 @@ pub struct TransactionInfo {
     pub location: Option<String>,
     pub check_number: Option<String>,
     pub associated_website: Option<String>,
+}
+
+impl TransactionInfo {
+    pub fn date(&self) -> NaiveDate {
+        // Use authorized date if available (since that's likely the date the user initiated the transaction) and posted date otherwise.
+        self.authorized_date.unwrap_or(self.posted_date)
+    }
 }
