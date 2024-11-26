@@ -1,9 +1,13 @@
 use anyhow::{anyhow, bail, Context as _, Result};
 use console::{pad_str, style, Alignment, StyledObject};
+use futures::stream::FuturesUnordered;
+use futures::StreamExt as _;
+use indicatif::{MultiProgress, ProgressBar};
 use rand::{rngs::StdRng, RngCore, SeedableRng};
 use rust_decimal::Decimal;
 use std::collections::HashMap;
 use std::path::Path;
+use std::time::Duration;
 
 use crate::args::{Args, Command};
 use crate::db::{
@@ -135,9 +139,47 @@ impl Cli {
 
     pub async fn main_sync(&mut self) -> Result<()> {
         println!("{}", style_header("Syncing connections:"));
-        let printer = BulletPointPrinter::new_stdout();
-        for connection in &mut self.db.bank_connections {
-            Self::sync_connection(&self.plaid_api, connection, &printer).await?;
+        let progress = MultiProgress::new();
+        let printer = BulletPointPrinter::new_multiprogress(&progress);
+        let mut sync_results: FuturesUnordered<_> = self
+            .db
+            .bank_connections
+            .iter_mut()
+            .map(|connection| async {
+                let pb = progress
+                    .add(ProgressBar::new_spinner().with_message(connection.name().to_string()));
+                pb.enable_steady_tick(Duration::from_millis(50));
+                let sync_result = Self::sync_connection(&self.plaid_api, connection).await?;
+                pb.finish_and_clear();
+
+                Ok::<(&mut BankConnection, SyncConnectionResult), anyhow::Error>((
+                    connection,
+                    sync_result,
+                ))
+            })
+            .collect();
+        while let Some(sync_result) = sync_results.next().await {
+            let (connection, sync_result) = sync_result?;
+            printer.print_item(style_connection(connection));
+            let printer = printer.indent();
+            for (account_id, sync_result) in sync_result.account_results {
+                let account = connection.account(&account_id).unwrap();
+
+                printer.print_item(style_account(&account));
+                let printer = printer.indent();
+                if account.is_connected() {
+                    printer.print_item(style(format!("Added: {}", sync_result.num_added)).italic());
+                    printer.print_item(
+                        style(format!("Verified: {}", sync_result.num_verified)).italic(),
+                    );
+                } else {
+                    printer.print_item(
+                        style(format!("Transactions: {}", sync_result.num_added))
+                            .italic()
+                            .strikethrough(),
+                    );
+                }
+            }
         }
         Ok(())
     }
@@ -145,19 +187,24 @@ impl Cli {
     async fn sync_connection(
         plaid_api: &plaid_api::Plaid,
         bank_connection: &mut BankConnection,
-        printer: &BulletPointPrinter<impl LineWriter + Clone>,
-    ) -> Result<()> {
-        printer.print_item(style_connection(bank_connection));
-        let printer = printer.indent();
-
+    ) -> Result<SyncConnectionResult> {
         let transactions =
             plaid_api::get_transactions(plaid_api, &bank_connection.access_token()).await?;
 
-        let mut num_added: HashMap<AccountId, u64> = bank_connection
-            .accounts()
-            .map(|(id, _)| (id.clone(), 0))
-            .collect();
-        let mut num_verified = num_added.clone();
+        let mut sync_result = SyncConnectionResult {
+            account_results: bank_connection
+                .accounts()
+                .map(|(id, _)| {
+                    (
+                        id.clone(),
+                        SyncAccountResult {
+                            num_added: 0,
+                            num_verified: 0,
+                        },
+                    )
+                })
+                .collect(),
+        };
         for transaction in transactions {
             let account = bank_connection
                 .account_mut(&transaction.account_id)
@@ -173,47 +220,21 @@ impl Cli {
                     .add_or_verify_transaction(transaction.transaction_id, transaction.transaction);
                 match add_or_verify_result {
                     AddOrVerifyResult::Added => {
-                        *num_added.get_mut(&transaction.account_id).unwrap() += 1;
+                        sync_result.increment_num_added(&transaction.account_id);
                     }
                     AddOrVerifyResult::ExistsAndMatches => {
-                        *num_verified.get_mut(&transaction.account_id).unwrap() += 1;
+                        sync_result.increment_num_verified(&transaction.account_id);
                     }
                     AddOrVerifyResult::ExistsAndDoesntMatch => {
                         bail!("Transaction {transaction_id:?} already exists but doesn't match",);
                     }
                 }
             } else {
-                *num_added.get_mut(&transaction.account_id).unwrap() += 1;
+                sync_result.increment_num_added(&transaction.account_id);
             }
         }
 
-        for account in bank_connection.accounts() {
-            printer.print_item(style_account(&account.1));
-            let printer = printer.indent();
-            if account.1.is_connected() {
-                printer.print_item(
-                    style(format!("Added: {}", num_added.get(&account.0).unwrap())).italic(),
-                );
-                printer.print_item(
-                    style(format!(
-                        "Verified: {}",
-                        num_verified.get(&account.0).unwrap()
-                    ))
-                    .italic(),
-                );
-            } else {
-                printer.print_item(
-                    style(format!(
-                        "Transactions: {}",
-                        num_added.get(&account.0).unwrap()
-                    ))
-                    .italic()
-                    .strikethrough(),
-                );
-            }
-        }
-
-        Ok(())
+        Ok(sync_result)
     }
 
     pub async fn main_list_transactions(&mut self) -> Result<()> {
@@ -279,6 +300,28 @@ impl Cli {
         export_transactions(new_transactions)?;
         Ok(())
     }
+}
+
+struct SyncConnectionResult {
+    account_results: HashMap<AccountId, SyncAccountResult>,
+}
+
+impl SyncConnectionResult {
+    pub fn increment_num_added(&mut self, account_id: &AccountId) {
+        self.account_results.get_mut(account_id).unwrap().num_added += 1;
+    }
+
+    pub fn increment_num_verified(&mut self, account_id: &AccountId) {
+        self.account_results
+            .get_mut(account_id)
+            .unwrap()
+            .num_verified += 1;
+    }
+}
+
+struct SyncAccountResult {
+    num_added: u64,
+    num_verified: u64,
 }
 
 fn prompt_add_account(

@@ -1,3 +1,5 @@
+use indicatif::MultiProgress;
+
 const INDENT_SIZE: usize = 2;
 
 pub struct BulletPointPrinter<W: LineWriter + Clone> {
@@ -29,6 +31,12 @@ impl BulletPointPrinter<StdoutLineWriter> {
     }
 }
 
+impl<'a> BulletPointPrinter<MultiProgressLineWriter<'a>> {
+    pub fn new_multiprogress(mp: &'a MultiProgress) -> Self {
+        Self::new(MultiProgressLineWriter { mp })
+    }
+}
+
 pub trait LineWriter {
     fn write_line(&self, line: &str);
 }
@@ -38,5 +46,16 @@ pub struct StdoutLineWriter;
 impl LineWriter for StdoutLineWriter {
     fn write_line(&self, line: &str) {
         println!("{}", line);
+    }
+}
+
+#[derive(Clone, Copy)]
+pub struct MultiProgressLineWriter<'a> {
+    mp: &'a MultiProgress,
+}
+
+impl<'a> LineWriter for MultiProgressLineWriter<'a> {
+    fn write_line(&self, line: &str) {
+        self.mp.println(line).unwrap()
     }
 }

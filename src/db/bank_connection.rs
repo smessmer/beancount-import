@@ -41,6 +41,10 @@ impl BankConnection {
         self.accounts.iter_mut()
     }
 
+    pub fn account(&self, account_id: &AccountId) -> Option<&Account> {
+        self.accounts.get(account_id)
+    }
+
     pub fn account_mut(&mut self, account_id: &AccountId) -> Option<&mut Account> {
         self.accounts.get_mut(account_id)
     }
