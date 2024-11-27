@@ -69,7 +69,7 @@ mod tests {
     use crate::db::{
         account::{Account, AccountType, BeancountAccountInfo, PlaidAccountInfo},
         bank_connection::BankConnection,
-        crypto::XChaCha20Poly1305Cipher,
+        crypto::{self, XChaCha20Poly1305Cipher},
         database::DatabaseV1,
         plaid_auth::DbPlaidAuth,
         AccessToken, AccountId,
@@ -84,7 +84,11 @@ mod tests {
         let mut key_bytes = [0; KEY_SIZE];
         rng.fill_bytes(&mut key_bytes);
 
-        XChaCha20Poly1305Cipher::with_key(key_bytes.into())
+        XChaCha20Poly1305Cipher::with_key(
+            <crypto::XChaCha20Poly1305Cipher as crypto::Cipher>::EncryptionKey::from_slice(
+                &key_bytes,
+            ),
+        )
     }
 
     fn some_db_1() -> DatabaseV1 {

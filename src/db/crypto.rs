@@ -6,7 +6,7 @@ pub trait Cipher {
     type EncryptionKey;
 
     fn new_key() -> Self::EncryptionKey;
-    fn with_key(key: Self::EncryptionKey) -> Self;
+    fn with_key(key: &Self::EncryptionKey) -> Self;
     fn encrypt(&self, plaintext: &[u8]) -> Result<Vec<u8>>;
     fn decrypt(&self, ciphertext: &[u8]) -> Result<Vec<u8>>;
 }
@@ -32,9 +32,9 @@ mod xchacha20poly1305cipher {
             XChaCha20Poly1305::generate_key(&mut OsRng)
         }
 
-        fn with_key(key: Key) -> Self {
+        fn with_key(key: &Key) -> Self {
             Self {
-                cipher: XChaCha20Poly1305::new(&key),
+                cipher: XChaCha20Poly1305::new(key),
             }
         }
 
@@ -77,13 +77,13 @@ mod tests {
         let mut rng = StdRng::seed_from_u64(seed);
         let mut key_bytes = [0; KEY_SIZE];
         rng.fill_bytes(&mut key_bytes);
-        key_bytes.into()
+        Key::clone_from_slice(&key_bytes)
     }
 
     #[test]
     fn given_emptydata_when_encrypted_then_canbedecrypted() {
         let plaintext = &[];
-        let cipher = XChaCha20Poly1305Cipher::with_key(key(1));
+        let cipher = XChaCha20Poly1305Cipher::with_key(&key(1));
         let ciphertext = cipher.encrypt(plaintext).unwrap();
         let decrypted_plaintext = cipher.decrypt(&ciphertext).unwrap();
         assert_eq!(plaintext.to_vec(), decrypted_plaintext);
@@ -93,7 +93,7 @@ mod tests {
     fn given_somedata_when_encrypted_then_canbedecrypted() {
         let plaintext = hex::decode("0ffc9a43e15ccfbef1b0880167df335677c9005948eeadb31f89b06b90a364ad03c6b0859652dca960f8fa60c75747c4f0a67f50f5b85b800468559ea1a816173c0abaf5df8f02978a54b250bc57c7c6a55d4d245014722c0b1764718a6d5ca654976370").unwrap();
 
-        let cipher = XChaCha20Poly1305Cipher::with_key(key(1));
+        let cipher = XChaCha20Poly1305Cipher::with_key(&key(1));
         let ciphertext = cipher.encrypt(&plaintext).unwrap();
         let decrypted_plaintext = cipher.decrypt(&ciphertext).unwrap();
         assert_eq!(plaintext.to_vec(), decrypted_plaintext);
@@ -103,7 +103,7 @@ mod tests {
     fn given_invalidciphertext_then_doesntdecrypt() {
         let plaintext = hex::decode("0ffc9a43e15ccfbef1b0880167df335677c9005948eeadb31f89b06b90a364ad03c6b0859652dca960f8fa60c75747c4f0a67f50f5b85b800468559ea1a816173c0abaf5df8f02978a54b250bc57c7c6a55d4d245014722c0b1764718a6d5ca654976370").unwrap();
 
-        let cipher = XChaCha20Poly1305Cipher::with_key(key(1));
+        let cipher = XChaCha20Poly1305Cipher::with_key(&key(1));
         let mut ciphertext = cipher.encrypt(&plaintext).unwrap();
         ciphertext[20] ^= 1;
         let decrypted_plaintext = cipher.decrypt(&ciphertext);
@@ -114,7 +114,7 @@ mod tests {
     fn given_toosmallciphertext_then_doesntdecrypt() {
         let plaintext = hex::decode("0ffc9a43e15ccfbef1b0880167df335677c9005948eeadb31f89b06b90a364ad03c6b0859652dca960f8fa60c75747c4f0a67f50f5b85b800468559ea1a816173c0abaf5df8f02978a54b250bc57c7c6a55d4d245014722c0b1764718a6d5ca654976370").unwrap();
 
-        let cipher = XChaCha20Poly1305Cipher::with_key(key(1));
+        let cipher = XChaCha20Poly1305Cipher::with_key(&key(1));
         let ciphertext = cipher.encrypt(&plaintext).unwrap();
         let ciphertext = &ciphertext[..(ciphertext.len() - 1)];
         let decrypted_plaintext = cipher.decrypt(&ciphertext);
@@ -123,7 +123,7 @@ mod tests {
 
     #[test]
     fn given_emptyciphertext_then_doesntdecrypt() {
-        let cipher = XChaCha20Poly1305Cipher::with_key(key(1));
+        let cipher = XChaCha20Poly1305Cipher::with_key(&key(1));
         let ciphertext = &[];
         let decrypted_plaintext = cipher.decrypt(ciphertext);
         assert!(decrypted_plaintext.is_err());
@@ -133,8 +133,8 @@ mod tests {
     fn given_differentkey_then_doesntdecrypt() {
         let plaintext =hex::decode("0ffc9a43e15ccfbef1b0880167df335677c9005948eeadb31f89b06b90a364ad03c6b0859652dca960f8fa60c75747c4f0a67f50f5b85b800468559ea1a816173c0abaf5df8f02978a54b250bc57c7c6a55d4d245014722c0b1764718a6d5ca654976370").unwrap();
 
-        let cipher1 = XChaCha20Poly1305Cipher::with_key(key(1));
-        let cipher2 = XChaCha20Poly1305Cipher::with_key(key(2));
+        let cipher1 = XChaCha20Poly1305Cipher::with_key(&key(1));
+        let cipher2 = XChaCha20Poly1305Cipher::with_key(&key(2));
         let ciphertext = cipher1.encrypt(&plaintext).unwrap();
         let decrypted_plaintext = cipher2.decrypt(&ciphertext);
         assert!(decrypted_plaintext.is_err());

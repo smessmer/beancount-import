@@ -1,11 +1,13 @@
-use anyhow::{anyhow, bail, Context as _, Result};
+use anyhow::{anyhow, bail, Context, Context as _, Result};
+use base64::Engine;
+use chacha20poly1305::{KeyInit, KeySizeUser as _, XChaCha20Poly1305};
 use console::{pad_str, style, Alignment, StyledObject};
 use futures::stream::FuturesUnordered;
 use futures::StreamExt as _;
 use indicatif::{MultiProgress, ProgressBar};
-use rand::{rngs::StdRng, RngCore, SeedableRng};
 use rust_decimal::Decimal;
 use std::collections::HashMap;
+use std::env::VarError;
 use std::path::Path;
 use std::time::Duration;
 
@@ -20,16 +22,11 @@ use crate::terminal::{self, BulletPointPrinter, LineWriter};
 use super::db::{self, BankConnection, Cipher, DatabaseV1, DbPlaidAuth, XChaCha20Poly1305Cipher};
 use super::plaid_api;
 
+const ENCRYPTION_KEY_ENCODER: base64::engine::general_purpose::GeneralPurpose =
+    base64::engine::general_purpose::URL_SAFE_NO_PAD;
+
 // TODO Configurable DB Location
 const DB_PATH: &str = "beancount_plaid.db";
-
-// TODO Configurable encryption key
-fn db_key() -> chacha20poly1305::Key {
-    let mut rng = StdRng::seed_from_u64(1);
-    let mut key_bytes = [0; 32];
-    rng.fill_bytes(&mut key_bytes);
-    key_bytes.into()
-}
 
 pub async fn main(args: Args) -> Result<()> {
     let mut cli = match args.command {
@@ -57,21 +54,22 @@ pub struct Cli {
 
 impl Cli {
     pub async fn new_init_db() -> Result<Self> {
-        let db_cipher = XChaCha20Poly1305Cipher::with_key(db_key());
         if tokio::fs::try_exists(DB_PATH).await.unwrap() {
             bail!("Database already exists");
         }
         let client_id = terminal::prompt("Plaid Client ID").unwrap();
         let secret = terminal::prompt("Plaid Secret").unwrap();
         let db = DatabaseV1::new(DbPlaidAuth::new(client_id, secret));
+
+        let db_cipher = gen_new_cipher();
         Ok(Self::_new(db, db_cipher))
     }
 
     pub async fn new_load_db() -> Result<Self> {
-        let db_cipher = XChaCha20Poly1305Cipher::with_key(db_key());
+        let db_cipher = load_cipher_from_environment()?;
         let db = db::load(&Path::new(DB_PATH), &db_cipher)
             .await
-            .context("Failed to load database")?
+            .with_context(||format!("Failed to load database. Is the {BEANCOUNT_PLAID_KEY_ENV_VAR} environment variable set correctly?"))?
             .ok_or_else(|| anyhow!("Database file not found"))?;
         Ok(Self::_new(db, db_cipher))
     }
@@ -323,6 +321,51 @@ impl Cli {
         export_transactions(new_transactions)?;
         Ok(())
     }
+}
+
+const BEANCOUNT_PLAID_KEY_ENV_VAR: &str = "BEANCOUNT_PLAID_KEY";
+
+fn gen_new_cipher() -> XChaCha20Poly1305Cipher {
+    let new_key = XChaCha20Poly1305Cipher::new_key();
+    let cipher = XChaCha20Poly1305Cipher::with_key(&new_key);
+    println!();
+    println!("Generated new encryption key.");
+    println!(
+        "{}",
+        style("Please set this environment variable for future runs:").bold()
+    );
+    println!(
+        "{}",
+        style(format!(
+            "{}={}",
+            BEANCOUNT_PLAID_KEY_ENV_VAR,
+            ENCRYPTION_KEY_ENCODER.encode(new_key),
+        ))
+        .blue()
+        .bold()
+    );
+    println!();
+    cipher
+}
+
+fn load_cipher_from_environment() -> Result<XChaCha20Poly1305Cipher> {
+    let key = match std::env::var(BEANCOUNT_PLAID_KEY_ENV_VAR) {
+        Ok(key) => key,
+        Err(VarError::NotPresent) => bail!("{BEANCOUNT_PLAID_KEY_ENV_VAR} environment variable not set. Please set it to the encryption key."),
+        Err(VarError::NotUnicode(_)) => bail!("{BEANCOUNT_PLAID_KEY_ENV_VAR} environment variable is not valid UTF-8. Please set it to the encryption key."),
+    };
+
+    let key = ENCRYPTION_KEY_ENCODER
+        .decode(key)
+        .with_context(|| format!("Failed to decode {BEANCOUNT_PLAID_KEY_ENV_VAR}"))?;
+    if key.len() != XChaCha20Poly1305::key_size() {
+        bail!(
+            "{BEANCOUNT_PLAID_KEY_ENV_VAR} must be {} bytes long",
+            XChaCha20Poly1305::key_size(),
+        );
+    }
+    let key = <XChaCha20Poly1305Cipher as Cipher>::EncryptionKey::from_slice(&key);
+    Ok(XChaCha20Poly1305Cipher::with_key(key))
 }
 
 struct SyncConnectionResult {
