@@ -106,7 +106,7 @@ impl Debug for Amount {
     }
 }
 
-#[derive(Serialize, Deserialize, Clone, PartialEq, Eq)]
+#[derive(Serialize, Deserialize, Clone, PartialEq, Eq, Hash)]
 pub struct TransactionCategory {
     pub primary: String,
     pub detailed: String,
