@@ -259,6 +259,10 @@ dependencies = [
 ]
 
 [[package]]
+name = "beancount-import-wave"
+version = "0.1.0"
+
+[[package]]
 name = "beancount-render"
 version = "0.1.0"
 source = "git+https://github.com/smessmer/beancount#3ce290695c5f96794e0f3677a9b70d0a3cfbf7a3"

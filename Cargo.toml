@@ -1,5 +1,5 @@
 [workspace]
-members = ["plaid"]
+members = [ "wave","plaid"]
 resolver = "2"
 
 [workspace.package]
