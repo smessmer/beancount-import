@@ -21,14 +21,34 @@ pub struct Account {
     pub balance_change: Decimal,
 }
 
+#[derive(Debug, PartialEq, Eq)]
+pub enum AccountType {
+    Debit,
+    Credit,
+}
+
 impl Account {
-    pub fn validate(&self) -> Result<(), &'static str> {
+    pub fn validate(&self) -> Result<Option<AccountType>, &'static str> {
+        let mut account_type = None;
         let mut balance = self.starting_balance;
         let mut total_debit = Decimal::zero();
         let mut total_credit = Decimal::zero();
         for posting in &self.postings {
-            balance += posting.debit - posting.credit;
-            if balance != posting.balance {
+            if posting.balance == balance + posting.debit - posting.credit {
+                match account_type {
+                    None => account_type = Some(AccountType::Debit),
+                    Some(AccountType::Debit) => {}
+                    Some(AccountType::Credit) => return Err("Debit account balance mismatch"),
+                }
+                balance = posting.balance;
+            } else if posting.balance == balance - posting.debit + posting.credit {
+                match account_type {
+                    None => account_type = Some(AccountType::Credit),
+                    Some(AccountType::Debit) => return Err("Credit account balance mismatch"),
+                    Some(AccountType::Credit) => {}
+                }
+                balance = posting.balance;
+            } else {
                 return Err("Posting balance mismatch");
             }
             total_debit += posting.debit;
@@ -46,7 +66,7 @@ impl Account {
         if self.starting_balance + self.balance_change != self.ending_balance.ending_balance {
             return Err("Balance change mismatch");
         }
-        return Ok(());
+        return Ok(account_type);
     }
 }
 
