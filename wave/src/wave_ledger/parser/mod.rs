@@ -1,8 +1,8 @@
 use chrono::NaiveDate;
 use nom::{
-    combinator::{all_consuming, cut, opt, value},
+    combinator::{all_consuming, cut, eof, opt, value},
     error::{context, VerboseError},
-    multi::many0,
+    multi::many_till,
     sequence::{terminated, tuple},
     IResult,
 };
@@ -22,12 +22,12 @@ pub struct Ledger {
 
 pub fn ledger(input: &str) -> IResult<&str, Ledger, VerboseError<&str>> {
     let (input, (start_date, end_date)) = context("Failed to parse header", header::header)(input)?;
-    let (input, accounts) = context(
+    let (input, (accounts, _eof)) = context(
         "Failed to parse ledger accounts",
-        all_consuming(many0(terminated(
-            cut(account::account),
-            opt(row_with_empty_cell),
-        ))),
+        all_consuming(many_till(
+            terminated(cut(account::account), opt(row_with_empty_cell)),
+            eof,
+        )),
     )(input)?;
 
     Ok((
@@ -49,6 +49,7 @@ fn row_with_empty_cell(input: &str) -> IResult<&str, (), VerboseError<&str>> {
 
 #[cfg(test)]
 mod tests {
+    use nom::error::{ErrorKind, VerboseErrorKind};
     use rust_decimal::{prelude::Zero, Decimal};
 
     use super::*;
@@ -164,11 +165,14 @@ Balance Change,,,$14.44,,
 bla"#;
         assert_eq!(
             ledger(input),
-            Err(nom::Err::Error(nom::error::VerboseError {
-                errors: vec![(
-                    "bla",
-                    nom::error::VerboseErrorKind::Nom(nom::error::ErrorKind::Eof)
-                )]
+            Err(nom::Err::Failure(nom::error::VerboseError {
+                errors: vec![
+                    ("bla", VerboseErrorKind::Nom(ErrorKind::MapRes)),
+                    ("bla", VerboseErrorKind::Context("Failed to parse cell_tag")),
+                    ("bla", VerboseErrorKind::Context("Failed to parse empty_cell")),
+                    ("bla", VerboseErrorKind::Context("Failed to parse account_header_row")),
+                    ("bla", VerboseErrorKind::Context("Failed to parse account")),
+                    (",First Account,,,,\nStarting Balance,,,,,$123.45\n,2024-01-04,Some: Addition,$1.23,,$124.68\n,2024-04-04,Some: Withdrawal,,$15.67,$109.01\nTotals and Ending Balance,,,$1.23,$15.67,$109.01\nBalance Change,,,-$14.44,,\n\"\"\n,Second Account,,,,\nStarting Balance,,,,,$123.45\n,2024-01-04,Some: Withdrawal,,$1.23,$122.22\n,2024-04-04,Some: Addition,$15.67,,$137.89\nTotals and Ending Balance,,,$15.67,$1.23,$137.89\nBalance Change,,,$14.44,,\n\"\"\nbla", VerboseErrorKind::Context("Failed to parse ledger accounts"))]
             }))
         );
     }
