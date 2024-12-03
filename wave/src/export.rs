@@ -31,7 +31,14 @@ pub fn print_exported_transactions<'a>(ledger: crate::ir::Ledger, config: &Confi
             .remove(&beancount_account)
             .unwrap_or_else(|| vec![]);
 
-        print_exported_account(&account, beancount_account, balances, dates, transactions)?;
+        print_exported_account(
+            &account,
+            config,
+            beancount_account,
+            balances,
+            dates,
+            transactions,
+        )?;
     }
 
     Ok(())
@@ -39,6 +46,7 @@ pub fn print_exported_transactions<'a>(ledger: crate::ir::Ledger, config: &Confi
 
 fn print_exported_account(
     import_account_name: &str,
+    config: &Config,
     account: beancount_core::Account,
     balances: AccountBalance,
     dates: Dates,
@@ -74,7 +82,7 @@ fn print_exported_account(
     directives.extend(
         transactions
             .into_iter()
-            .map(|transaction| transaction_to_beancount(account.clone(), transaction))
+            .map(|transaction| transaction_to_beancount(config, transaction))
             .collect::<Result<Vec<_>>>()?
             .into_iter(),
     );
@@ -99,7 +107,7 @@ fn print_exported_account(
 }
 
 fn transaction_to_beancount<'a>(
-    account: beancount_core::Account<'a>,
+    config: &'a Config,
     transaction: crate::ir::Transaction,
 ) -> Result<Directive<'a>> {
     let flag = if transaction.is_balanced() {
@@ -117,7 +125,7 @@ fn transaction_to_beancount<'a>(
         postings: transaction
             .postings
             .into_iter()
-            .map(|posting| posting_to_beancount(account.clone(), posting))
+            .map(|posting| posting_to_beancount(config, posting))
             .collect::<Result<Vec<_>>>()?,
         meta: hash_map![],
         source: None,
@@ -125,11 +133,11 @@ fn transaction_to_beancount<'a>(
 }
 
 fn posting_to_beancount<'a>(
-    account: beancount_core::Account<'a>,
+    config: &'a Config,
     posting: crate::ir::Posting,
 ) -> Result<beancount_core::Posting<'a>> {
     Ok(beancount_core::Posting {
-        account,
+        account: config.lookup_beancount_account_name(&posting.account_name)?,
         units: IncompleteAmount {
             num: Some(posting.amount),
             currency: Some(Cow::Borrowed(CURRENCY)),
