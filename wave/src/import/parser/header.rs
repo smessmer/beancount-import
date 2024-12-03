@@ -7,11 +7,11 @@ use nom::{
     IResult,
 };
 
-use super::utils::{cell_tag, comma, date_range, line_tag, row_end};
+use super::utils::{cell_tag, comma, date_range, line_any_content, line_tag, row_end};
 
 pub fn header(input: &str) -> IResult<&str, (NaiveDate, NaiveDate), VerboseError<&str>> {
     let (input, _) = line_tag("Account Transactions")(input)?;
-    let (input, _) = line_tag("Personal")(input)?;
+    let (input, _) = line_any_content(input)?; // "Personal" or company name
     let (input, date_range) = delimited(tag("Date Range: "), date_range, row_end)(input)?;
     let (input, _) = line_tag("Report Type: Accrual (Paid & Unpaid)")(input)?;
     let (input, _) = header_row(input)?;

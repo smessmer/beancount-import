@@ -1,5 +1,6 @@
 use nom::{
     bytes::complete::tag,
+    character::complete::not_line_ending,
     error::{context, VerboseError},
     sequence::terminated,
     IResult,
@@ -17,6 +18,14 @@ pub fn line_tag(
             terminated(tag(expected_line), row_end),
         )(input)
     }
+}
+
+/// Matches a full line with any content
+pub fn line_any_content(input: &str) -> IResult<&str, &str, VerboseError<&str>> {
+    context(
+        "Failed to parse line_any_content",
+        terminated(not_line_ending, row_end),
+    )(input)
 }
 
 #[cfg(test)]
@@ -43,5 +52,13 @@ mod tests {
                 ]
             }))
         );
+    }
+
+    #[test]
+    fn test_line_any_content() {
+        assert_eq!(line_any_content("foo\n"), Ok(("", "foo")));
+        assert_eq!(line_any_content("foo\r\n"), Ok(("", "foo")));
+        assert_eq!(line_any_content("foo"), Ok(("", "foo")));
+        assert_eq!(line_any_content("foo\nbar"), Ok(("bar", "foo")));
     }
 }
