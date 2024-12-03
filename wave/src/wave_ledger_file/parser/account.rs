@@ -1,3 +1,4 @@
+use anyhow::{ensure, Result};
 use chrono::NaiveDate;
 use nom::{
     combinator::map,
@@ -77,6 +78,16 @@ pub struct Posting {
     pub debit: Decimal,
     pub credit: Decimal,
     pub balance: Decimal,
+}
+
+impl Posting {
+    pub fn amount(&self) -> Result<Decimal> {
+        ensure!(
+            self.debit.is_zero() != self.credit.is_zero(),
+            "Exactly one of debit and credit must be zero"
+        );
+        Ok(self.debit - self.credit)
+    }
 }
 
 #[derive(Debug, PartialEq, Eq)]

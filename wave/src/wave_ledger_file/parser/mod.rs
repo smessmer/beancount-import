@@ -14,13 +14,13 @@ mod account;
 mod header;
 
 #[derive(Debug, PartialEq, Eq)]
-pub struct Ledger {
-    start_date: NaiveDate,
-    end_date: NaiveDate,
-    accounts: Vec<account::Account>,
+pub struct WaveLedger {
+    pub start_date: NaiveDate,
+    pub end_date: NaiveDate,
+    pub accounts: Vec<account::Account>,
 }
 
-pub fn ledger(input: &str) -> IResult<&str, Ledger, VerboseError<&str>> {
+pub fn ledger(input: &str) -> IResult<&str, WaveLedger, VerboseError<&str>> {
     let (input, (start_date, end_date)) = context("Failed to parse header", header::header)(input)?;
     let (input, (accounts, _eof)) = context(
         "Failed to parse ledger accounts",
@@ -32,7 +32,7 @@ pub fn ledger(input: &str) -> IResult<&str, Ledger, VerboseError<&str>> {
 
     Ok((
         input,
-        Ledger {
+        WaveLedger {
             start_date,
             end_date,
             accounts,
@@ -53,7 +53,7 @@ mod tests {
     use rust_decimal::{prelude::Zero, Decimal};
 
     use super::*;
-    use crate::wave_ledger::parser::account::{Account, EndingBalance, Posting};
+    use crate::wave_ledger_file::parser::account::{Account, EndingBalance, Posting};
 
     #[test]
     fn test_ledger() {
@@ -79,7 +79,7 @@ Balance Change,,,$14.44,,"#;
             ledger(input),
             Ok((
                 "",
-                Ledger {
+                WaveLedger {
                     start_date: NaiveDate::from_ymd_opt(2024, 1, 1).unwrap(),
                     end_date: NaiveDate::from_ymd_opt(2024, 11, 30).unwrap(),
                     accounts: vec![
