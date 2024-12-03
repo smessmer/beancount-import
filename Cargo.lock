@@ -263,6 +263,8 @@ name = "beancount-import-wave"
 version = "0.1.0"
 dependencies = [
  "anyhow",
+ "beancount-core",
+ "beancount-render",
  "chrono",
  "common_macros",
  "nom",

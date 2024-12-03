@@ -1,9 +1,9 @@
 use anyhow::Result;
 
-mod beancount_export;
+mod export;
+mod import;
 mod ir;
 mod operations;
-mod wave_ledger_file;
 
 pub fn main() -> Result<()> {
     // TODO clap, input file as arg
@@ -12,11 +12,12 @@ pub fn main() -> Result<()> {
     )
     .unwrap();
 
-    let ledger = wave_ledger_file::load(file).unwrap();
-    let ledger = operations::merge_transactions_with_same_date_and_same_description(ledger);
+    let ledger = import::load(file).unwrap();
+    let ledger = operations::merge_transactions_with_same_date_description_and_amount(ledger);
+    let ledger = operations::sort_transactions_by_date(ledger);
     operations::check_transactions_are_balanced_per_date(&ledger)?;
 
-    println!("{:?}", ledger);
+    export::print_exported_transactions(ledger)?;
 
     Ok(())
 }

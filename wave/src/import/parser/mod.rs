@@ -53,7 +53,7 @@ mod tests {
     use rust_decimal::{prelude::Zero, Decimal};
 
     use super::*;
-    use crate::wave_ledger_file::parser::account::{Account, EndingBalance, Posting};
+    use crate::import::parser::account::{Account, EndingBalance, Posting};
 
     #[test]
     fn test_ledger() {
