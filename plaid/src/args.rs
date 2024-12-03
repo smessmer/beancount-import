@@ -1,3 +1,5 @@
+use std::path::PathBuf;
+
 use clap::{Parser, Subcommand};
 
 /// Download transactions from Plaid and export them to Beancount.
@@ -5,6 +7,10 @@ use clap::{Parser, Subcommand};
 pub struct Args {
     #[clap(subcommand)]
     pub command: Command,
+
+    /// Path to the database file
+    #[clap(long)]
+    pub db_path: PathBuf,
 }
 
 #[derive(Debug, Subcommand)]

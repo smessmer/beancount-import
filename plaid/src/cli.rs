@@ -1,6 +1,6 @@
-use anyhow::{anyhow, bail, Context, Context as _, Result};
+use anyhow::{anyhow, bail, Context, Result};
 use base64::Engine;
-use chacha20poly1305::{KeyInit, KeySizeUser as _, XChaCha20Poly1305};
+use chacha20poly1305::{KeySizeUser as _, XChaCha20Poly1305};
 use console::{pad_str, style, Alignment, StyledObject};
 use futures::stream::FuturesUnordered;
 use futures::StreamExt as _;
@@ -8,7 +8,7 @@ use indicatif::{MultiProgress, ProgressBar};
 use rust_decimal::Decimal;
 use std::collections::HashMap;
 use std::env::VarError;
-use std::path::Path;
+use std::path::PathBuf;
 use std::time::Duration;
 
 use crate::args::{Args, Command};
@@ -25,13 +25,10 @@ use super::plaid_api;
 const ENCRYPTION_KEY_ENCODER: base64::engine::general_purpose::GeneralPurpose =
     base64::engine::general_purpose::URL_SAFE_NO_PAD;
 
-// TODO Configurable DB Location
-const DB_PATH: &str = "beancount_plaid.db";
-
 pub async fn main(args: Args) -> Result<()> {
     let mut cli = match args.command {
-        Command::Init => Cli::new_init_db().await?,
-        _ => Cli::new_load_db().await?,
+        Command::Init => Cli::new_init_db(args.db_path).await?,
+        _ => Cli::new_load_db(args.db_path).await?,
     };
     match args.command {
         Command::Init => cli.main_init().await?,
@@ -48,13 +45,14 @@ pub async fn main(args: Args) -> Result<()> {
 
 pub struct Cli {
     db: DatabaseV1,
+    db_path: PathBuf,
     db_cipher: XChaCha20Poly1305Cipher,
     plaid_api: plaid_api::Plaid,
 }
 
 impl Cli {
-    pub async fn new_init_db() -> Result<Self> {
-        if tokio::fs::try_exists(DB_PATH).await.unwrap() {
+    pub async fn new_init_db(db_path: PathBuf) -> Result<Self> {
+        if tokio::fs::try_exists(&db_path).await.unwrap() {
             bail!("Database already exists");
         }
         let client_id = terminal::prompt("Plaid Client ID").unwrap();
@@ -62,29 +60,30 @@ impl Cli {
         let db = DatabaseV1::new(DbPlaidAuth::new(client_id, secret));
 
         let db_cipher = gen_new_cipher();
-        Ok(Self::_new(db, db_cipher))
+        Ok(Self::_new(db, db_path, db_cipher))
     }
 
-    pub async fn new_load_db() -> Result<Self> {
+    pub async fn new_load_db(db_path: PathBuf) -> Result<Self> {
         let db_cipher = load_cipher_from_environment()?;
-        let db = db::load(&Path::new(DB_PATH), &db_cipher)
+        let db = db::load(&db_path, &db_cipher)
             .await
             .with_context(||format!("Failed to load database. Is the {BEANCOUNT_PLAID_KEY_ENV_VAR} environment variable set correctly?"))?
             .ok_or_else(|| anyhow!("Database file not found"))?;
-        Ok(Self::_new(db, db_cipher))
+        Ok(Self::_new(db, db_path, db_cipher))
     }
 
-    fn _new(db: DatabaseV1, db_cipher: XChaCha20Poly1305Cipher) -> Self {
+    fn _new(db: DatabaseV1, db_path: PathBuf, db_cipher: XChaCha20Poly1305Cipher) -> Self {
         let plaid_api = plaid_api::Plaid::new(db.plaid_auth.to_api_auth());
         Self {
             db,
+            db_path,
             db_cipher,
             plaid_api,
         }
     }
 
     pub async fn save_db(self) -> Result<()> {
-        db::save(self.db, &Path::new(DB_PATH), &self.db_cipher)
+        db::save(self.db, &self.db_path, &self.db_cipher)
             .await
             .context("Failed to save database")?;
         Ok(())
