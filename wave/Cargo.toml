@@ -14,6 +14,7 @@ beancount-render = {git = "https://github.com/smessmer/beancount", version = "0.
 serde = {version = "1.0.215", features = ["derive"]}
 dialoguer = "0.11.0"
 serde_yaml = "0.9.34"
+clap = {version = "4.5.21", features = ["derive"]}
 
 [dev-dependencies]
 rstest = "0.23.0"

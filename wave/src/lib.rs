@@ -1,5 +1,6 @@
 use anyhow::Result;
 
+mod args;
 mod config;
 mod export;
 mod import;
@@ -7,11 +8,8 @@ mod ir;
 mod operations;
 
 pub fn main() -> Result<()> {
-    // TODO clap, input file as arg
-    let file = std::fs::File::open(
-        "/home/heinzi/Downloads/Personal Account Transactions 2024-12-02-06_40.csv",
-    )
-    .unwrap();
+    let args = args::parse();
+    let file = std::fs::File::open(args.from_csv).unwrap();
 
     let ledger = import::load(file).unwrap();
     let ledger = operations::merge_transactions_with_same_date_description_and_amount(ledger);
