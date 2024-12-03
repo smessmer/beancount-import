@@ -13,6 +13,8 @@ use utils::{empty_cell, row_end};
 mod account;
 mod header;
 
+pub use account::AccountType;
+
 #[derive(Debug, PartialEq, Eq)]
 pub struct WaveLedger {
     pub ledger_name: String,

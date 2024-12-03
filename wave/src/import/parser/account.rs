@@ -69,6 +69,11 @@ impl Account {
         }
         return Ok(account_type);
     }
+
+    pub fn account_type(&self) -> Option<AccountType> {
+        // Unwrap is ok because this should already have been validated
+        self.validate().unwrap()
+    }
 }
 
 #[derive(Debug, PartialEq, Eq)]

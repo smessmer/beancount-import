@@ -1,10 +1,11 @@
 use anyhow::Result;
 use nom::{error::VerboseError, Finish, Parser};
+use rust_decimal::{prelude::Zero, Decimal};
 use std::io::Read;
 
 mod parser;
 
-use parser::WaveLedger;
+use parser::{AccountType, WaveLedger};
 
 use crate::ir::{AccountBalance, Dates, Ledger, Posting, Transaction};
 
@@ -48,15 +49,34 @@ fn to_ir(ledger: WaveLedger) -> Result<Ledger> {
         .accounts
         .iter()
         .map(|account| {
-            (
+            Ok((
                 account.name.clone(),
-                AccountBalance {
-                    start_balance: account.starting_balance,
-                    end_balance: account.ending_balance.ending_balance,
+                match account.account_type() {
+                    Some(AccountType::Debit) => AccountBalance {
+                        start_balance: account.starting_balance,
+                        end_balance: account.ending_balance.ending_balance,
+                    },
+                    Some(AccountType::Credit) => AccountBalance {
+                        start_balance: -account.starting_balance,
+                        end_balance: -account.ending_balance.ending_balance,
+                    },
+                    None => {
+                        if account.starting_balance.is_zero() && account.ending_balance.ending_balance.is_zero() {
+                            AccountBalance {
+                                start_balance: Decimal::zero(),
+                                end_balance: Decimal::zero(),
+                            }
+                        } else {
+                            anyhow::bail!(
+                                "Couldn't determine account type (debit vs credit) of account '{}'. ",
+                                account.name
+                            );
+                        }
+                    }
                 },
-            )
+            ))
         })
-        .collect();
+        .collect::<Result<_>>()?;
     let transactions = ledger
         .accounts
         .into_iter()
