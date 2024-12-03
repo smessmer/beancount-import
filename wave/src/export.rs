@@ -22,27 +22,21 @@ fn opening_balance_account() -> beancount_core::Account<'static> {
 pub fn print_exported_transactions<'a>(ledger: crate::ir::Ledger, config: &Config) -> Result<()> {
     print_exported_header(&ledger)?;
 
-    let dates = ledger.dates;
     let balances = ledger.account_balances.clone();
-    let mut account_ledgers = group_by_account(ledger, config)?;
 
-    // Don't iterate over account_ledgers because they may not contain all accounts (e.g. they won't contain accounts that have all transactions assigned to other accounts)
-    // Instead, iterate over all account names in the ledger. This makes sure we still print account opening directives and balance assertions for accounts that have no transactions.
-    for (account, balances) in balances.into_iter() {
-        let beancount_account = config.lookup_beancount_account_name(&account)?;
-        let transactions = account_ledgers
-            .remove(&beancount_account)
-            .unwrap_or_else(|| vec![]);
+    let (balanced_transactions, unbalanced_transactions): (Vec<_>, Vec<_>) = ledger
+        .transactions
+        .into_iter()
+        .partition(|transaction| transaction.is_balanced());
 
-        print_exported_account(
-            &account,
-            config,
-            beancount_account,
-            balances,
-            dates,
-            transactions,
-        )?;
-    }
+    print_accounts_and_contained_balanced_transactions(
+        balanced_transactions,
+        config,
+        ledger.dates,
+        balances,
+    )?;
+
+    print_unbalanced_transactions(unbalanced_transactions, config)?;
 
     Ok(())
 }
@@ -85,7 +79,36 @@ fn print_exported_header(ledger: &ir::Ledger) -> Result<()> {
     Ok(())
 }
 
-fn print_exported_account(
+fn print_accounts_and_contained_balanced_transactions(
+    balanced_transactions: Vec<Transaction>,
+    config: &Config,
+    dates: Dates,
+    balances: HashMap<String, AccountBalance>,
+) -> Result<()> {
+    let mut account_ledgers = group_by_account(balanced_transactions.into_iter(), config)?;
+
+    // Don't iterate over account_ledgers because they may not contain all accounts (e.g. they won't contain accounts that have all transactions assigned to other accounts)
+    // Instead, iterate over all account names in the ledger. This makes sure we still print account opening directives and balance assertions for accounts that have no transactions.
+    for (account, balances) in balances.into_iter() {
+        let beancount_account = config.lookup_beancount_account_name(&account)?;
+        let transactions = account_ledgers
+            .remove(&beancount_account)
+            .unwrap_or_else(|| vec![]);
+
+        print_account_and_transactions(
+            &account,
+            config,
+            beancount_account,
+            balances,
+            dates,
+            transactions,
+        )?;
+    }
+
+    Ok(())
+}
+
+fn print_account_and_transactions(
     import_account_name: &str,
     config: &Config,
     account: beancount_core::Account,
@@ -159,6 +182,20 @@ fn print_exported_account(
     Ok(())
 }
 
+fn print_unbalanced_transactions(
+    unbalanced_transactions: Vec<Transaction>,
+    config: &Config,
+) -> Result<()> {
+    println!("\n\n;; Unbalanced Transactions\n");
+    let directives = unbalanced_transactions
+        .into_iter()
+        .map(|transaction| transaction_to_beancount(config, transaction))
+        .collect::<Result<Vec<_>>>()?;
+    let ledger = beancount_core::Ledger { directives };
+    beancount_render::render(&mut stdout(), &ledger)?;
+    Ok(())
+}
+
 fn transaction_to_beancount<'a>(
     config: &'a Config,
     transaction: crate::ir::Transaction,
@@ -202,12 +239,12 @@ fn posting_to_beancount<'a>(
     })
 }
 fn group_by_account(
-    ledger: ir::Ledger,
+    transactions: impl Iterator<Item = Transaction>,
     config: &Config,
 ) -> Result<HashMap<beancount_core::Account, Vec<Transaction>>> {
     let mut result = HashMap::new();
 
-    for transaction in ledger.transactions {
+    for transaction in transactions {
         let touched_accounts = transaction
             .postings
             .iter()
