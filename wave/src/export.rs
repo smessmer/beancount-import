@@ -2,6 +2,7 @@ use std::{borrow::Cow, collections::HashMap, io::stdout};
 
 use anyhow::{anyhow, Result};
 use beancount_core::{Amount, Balance, Directive, Flag, IncompleteAmount, Open};
+use chrono::Days;
 use common_macros::{hash_map, hash_set};
 
 use crate::{
@@ -53,21 +54,33 @@ fn print_exported_account(
     transactions: Vec<Transaction>,
 ) -> Result<()> {
     let mut directives = vec![];
+    // Open the account a day before the first transaction because the balance assertion must be on the day after the pad directive.
+    let day_before_start_date = dates
+        .start_date
+        .checked_sub_days(Days::new(1))
+        .ok_or_else(|| anyhow!("Failed to subtract a day from the start date"))?;
+    //  Add the last balance assertion a day after the last transaction because the balance assertion is applied to the beginning of the day.
+    let day_after_end_date = dates
+        .end_date
+        .checked_add_days(Days::new(1))
+        .ok_or_else(|| anyhow!("Failed to add a day to the end date"))?;
     directives.push(Directive::Open(Open {
-        date: dates.start_date.into(),
+        date: day_before_start_date.into(),
         account: account.clone(),
         currencies: vec![Cow::Borrowed(CURRENCY)],
         booking: None,
         meta: hash_map![],
         source: None,
     }));
-    directives.push(Directive::Pad(beancount_core::Pad {
-        date: dates.start_date.into(),
-        pad_to_account: account.clone(),
-        pad_from_account: opening_balance_account(),
-        meta: hash_map![],
-        source: None,
-    }));
+    if !balances.start_balance.is_zero() {
+        directives.push(Directive::Pad(beancount_core::Pad {
+            date: day_before_start_date.into(),
+            pad_to_account: account.clone(),
+            pad_from_account: opening_balance_account(),
+            meta: hash_map![],
+            source: None,
+        }));
+    }
     directives.push(Directive::Balance(Balance {
         date: dates.start_date.into(),
         account: account.clone(),
@@ -87,7 +100,7 @@ fn print_exported_account(
             .into_iter(),
     );
     directives.push(Directive::Balance(Balance {
-        date: dates.end_date.into(),
+        date: day_after_end_date.into(),
         account: account.clone(),
         amount: Amount {
             num: balances.end_balance,
