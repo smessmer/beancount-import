@@ -435,7 +435,7 @@ fn prompt_beancount_account_info() -> Result<BeancountAccountInfo> {
     const PROMPT: &str = "Beancount account name";
     let mut name = terminal::prompt(PROMPT)?;
     loop {
-        match parse_beancount_account_info(&name) {
+        match parse_beancount_account_name(&name) {
             Ok(info) => return Ok(info),
             Err(err) => {
                 println!("{}", style(err).red().bold());
@@ -445,7 +445,7 @@ fn prompt_beancount_account_info() -> Result<BeancountAccountInfo> {
     }
 }
 
-fn parse_beancount_account_info(name: &str) -> Result<BeancountAccountInfo, &'static str> {
+fn parse_beancount_account_name(name: &str) -> Result<BeancountAccountInfo, &'static str> {
     let mut parts = name.split(':');
     let ty = parts
         .next()

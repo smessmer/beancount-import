@@ -1,9 +1,25 @@
+use std::collections::HashSet;
+
 use chrono::NaiveDate;
 use rust_decimal::Decimal;
 
 #[derive(Debug, Clone)]
 pub struct Ledger {
     pub transactions: Vec<Transaction>,
+}
+
+impl Ledger {
+    pub fn account_names(&self) -> HashSet<&str> {
+        self.transactions
+            .iter()
+            .flat_map(|transaction| {
+                transaction
+                    .postings
+                    .iter()
+                    .map(|posting| posting.account_name.as_str())
+            })
+            .collect()
+    }
 }
 
 #[derive(Debug, Clone)]

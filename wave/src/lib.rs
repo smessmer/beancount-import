@@ -1,5 +1,6 @@
 use anyhow::Result;
 
+mod config;
 mod export;
 mod import;
 mod ir;
@@ -17,7 +18,10 @@ pub fn main() -> Result<()> {
     let ledger = operations::sort_transactions_by_date(ledger);
     operations::check_transactions_are_balanced_per_date(&ledger)?;
 
-    export::print_exported_transactions(ledger)?;
+    let config =
+        config::prompt_edit_config(ledger.account_names().into_iter().map(str::to_string))?;
+
+    export::print_exported_transactions(ledger, &config)?;
 
     Ok(())
 }
