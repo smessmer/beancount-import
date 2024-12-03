@@ -6,7 +6,7 @@ use common_macros::{hash_map, hash_set};
 
 use crate::db::{AccountType, BeancountAccountInfo, Transaction, TransactionId, TransactionInfo};
 
-pub fn export_transactions<'a>(
+pub fn print_exported_transactions<'a>(
     transactions: impl Iterator<Item = (&'a BeancountAccountInfo, &'a TransactionId, &'a Transaction)>,
 ) -> Result<()> {
     let ledger = Ledger {

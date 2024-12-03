@@ -16,7 +16,7 @@ use crate::db::{
     Account, AccountId, AccountType, AddOrVerifyResult, Amount, BeancountAccountInfo,
     PlaidAccountInfo, Transaction,
 };
-use crate::export::export_transactions;
+use crate::export::print_exported_transactions;
 use crate::terminal::{self, BulletPointPrinter, LineWriter};
 
 use super::db::{self, BankConnection, Cipher, DatabaseV1, DbPlaidAuth, XChaCha20Poly1305Cipher};
@@ -297,7 +297,7 @@ impl Cli {
                 })
             })
         });
-        export_transactions(all_transactions)?;
+        print_exported_transactions(all_transactions)?;
         Ok(())
     }
 
@@ -318,7 +318,7 @@ impl Cli {
                 })
             })
         });
-        export_transactions(new_transactions)?;
+        print_exported_transactions(new_transactions)?;
         Ok(())
     }
 }

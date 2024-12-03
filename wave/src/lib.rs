@@ -1,5 +1,6 @@
 use anyhow::Result;
 
+mod beancount_export;
 mod ir;
 mod operations;
 mod wave_ledger_file;
