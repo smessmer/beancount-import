@@ -1,10 +1,12 @@
-use std::collections::HashSet;
+use std::collections::{HashMap, HashSet};
 
 use chrono::NaiveDate;
 use rust_decimal::Decimal;
 
 #[derive(Debug, Clone)]
 pub struct Ledger {
+    pub dates: Dates,
+    pub account_balances: HashMap<String, AccountBalance>,
     pub transactions: Vec<Transaction>,
 }
 
@@ -20,6 +22,18 @@ impl Ledger {
             })
             .collect()
     }
+}
+
+#[derive(Debug, Clone)]
+pub struct AccountBalance {
+    pub start_balance: Decimal,
+    pub end_balance: Decimal,
+}
+
+#[derive(Debug, Clone, Copy)]
+pub struct Dates {
+    pub start_date: NaiveDate,
+    pub end_date: NaiveDate,
 }
 
 #[derive(Debug, Clone)]

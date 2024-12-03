@@ -21,6 +21,8 @@ pub fn merge_transactions_with_same_date_description_and_amount(ledger: Ledger) 
                 transactions_from_postings(date, description, postings)
             })
             .collect(),
+        dates: ledger.dates,
+        account_balances: ledger.account_balances,
     }
 }
 

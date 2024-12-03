@@ -6,7 +6,7 @@ mod parser;
 
 use parser::WaveLedger;
 
-use crate::ir::{Ledger, Posting, Transaction};
+use crate::ir::{AccountBalance, Dates, Ledger, Posting, Transaction};
 
 pub fn load(input_stream: impl Read) -> Result<Ledger> {
     let wave_ledger = load_wave_ledger(input_stream)?;
@@ -39,6 +39,23 @@ fn maybe_remove_byte_order_mark(mut content: String) -> String {
 }
 
 fn to_ir(ledger: WaveLedger) -> Result<Ledger> {
+    let dates = Dates {
+        start_date: ledger.start_date,
+        end_date: ledger.end_date,
+    };
+    let account_balances = ledger
+        .accounts
+        .iter()
+        .map(|account| {
+            (
+                account.name.clone(),
+                AccountBalance {
+                    start_balance: account.starting_balance,
+                    end_balance: account.ending_balance.ending_balance,
+                },
+            )
+        })
+        .collect();
     let transactions = ledger
         .accounts
         .into_iter()
@@ -56,5 +73,9 @@ fn to_ir(ledger: WaveLedger) -> Result<Ledger> {
             })
         })
         .collect::<Result<Vec<_>>>()?;
-    Ok(Ledger { transactions })
+    Ok(Ledger {
+        transactions,
+        dates,
+        account_balances,
+    })
 }
