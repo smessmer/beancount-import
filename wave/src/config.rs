@@ -58,7 +58,7 @@ impl AccountConfig {
 pub fn prompt_edit_config(imported_account_names: impl Iterator<Item = String>) -> Result<Config> {
     let initial_config = Config {
         beancount_account_names: imported_account_names
-            .map(|name| (name.clone(), AccountConfig("Assets:x".to_string())))
+            .map(|name| (name.clone(), AccountConfig("".to_string())))
             .collect(),
     };
     let serialized = serde_yaml::to_string(&initial_config)?;
