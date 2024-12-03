@@ -39,6 +39,7 @@ fn maybe_remove_byte_order_mark(mut content: String) -> String {
 }
 
 fn to_ir(ledger: WaveLedger) -> Result<Ledger> {
+    let ledger_name = ledger.ledger_name;
     let dates = Dates {
         start_date: ledger.start_date,
         end_date: ledger.end_date,
@@ -74,6 +75,7 @@ fn to_ir(ledger: WaveLedger) -> Result<Ledger> {
         })
         .collect::<Result<Vec<_>>>()?;
     Ok(Ledger {
+        ledger_name,
         transactions,
         dates,
         account_balances,

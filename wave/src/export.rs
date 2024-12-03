@@ -1,7 +1,7 @@
 use std::{borrow::Cow, collections::HashMap, io::stdout};
 
 use anyhow::{anyhow, Result};
-use beancount_core::{Amount, Balance, Directive, Flag, IncompleteAmount, Open};
+use beancount_core::{Amount, Balance, BcOption, Directive, Flag, IncompleteAmount, Open};
 use chrono::Days;
 use common_macros::{hash_map, hash_set};
 
@@ -20,6 +20,8 @@ fn opening_balance_account() -> beancount_core::Account<'static> {
 }
 
 pub fn print_exported_transactions<'a>(ledger: crate::ir::Ledger, config: &Config) -> Result<()> {
+    print_exported_header(&ledger)?;
+
     let dates = ledger.dates;
     let balances = ledger.account_balances.clone();
     let mut account_ledgers = group_by_account(ledger, config)?;
@@ -41,6 +43,44 @@ pub fn print_exported_transactions<'a>(ledger: crate::ir::Ledger, config: &Confi
             transactions,
         )?;
     }
+
+    Ok(())
+}
+
+fn print_exported_header(ledger: &ir::Ledger) -> Result<()> {
+    println!(
+        "; Exported from Wave: {ledger_name}\n; Start Date: {start_date}\n; End Date: {end_date}\n",
+        ledger_name = ledger.ledger_name,
+        start_date = ledger.dates.start_date,
+        end_date = ledger.dates.end_date
+    );
+    let day_before_start_date = ledger
+        .dates
+        .start_date
+        .checked_sub_days(Days::new(1))
+        .ok_or_else(|| anyhow!("Failed to subtract a day from the start date"))?;
+    let directives = vec![
+        Directive::Option(BcOption {
+            name: Cow::Borrowed("title"),
+            val: Cow::Borrowed(ledger.ledger_name.as_str()),
+            source: None,
+        }),
+        Directive::Option(BcOption {
+            name: Cow::Borrowed("operating_currency"),
+            val: Cow::Borrowed(CURRENCY),
+            source: None,
+        }),
+        Directive::Open(Open {
+            date: day_before_start_date.into(),
+            account: opening_balance_account(),
+            currencies: vec![Cow::Borrowed(CURRENCY)],
+            booking: None,
+            meta: hash_map![],
+            source: None,
+        }),
+    ];
+    let ledger = beancount_core::Ledger { directives };
+    beancount_render::render(&mut stdout(), &ledger)?;
 
     Ok(())
 }

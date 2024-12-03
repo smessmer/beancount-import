@@ -15,14 +15,15 @@ pub fn merge_transactions_with_same_date_description_and_amount(ledger: Ledger) 
     );
 
     Ledger {
+        ledger_name: ledger.ledger_name,
+        dates: ledger.dates,
+        account_balances: ledger.account_balances,
         transactions: merged_transactions
             .into_iter()
             .flat_map(move |((date, description), postings)| {
                 transactions_from_postings(date, description, postings)
             })
             .collect(),
-        dates: ledger.dates,
-        account_balances: ledger.account_balances,
     }
 }
 

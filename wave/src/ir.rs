@@ -5,6 +5,7 @@ use rust_decimal::Decimal;
 
 #[derive(Debug, Clone)]
 pub struct Ledger {
+    pub ledger_name: String,
     pub dates: Dates,
     pub account_balances: HashMap<String, AccountBalance>,
     pub transactions: Vec<Transaction>,

@@ -9,14 +9,28 @@ use nom::{
 
 use super::utils::{cell_tag, comma, date_range, line_any_content, line_tag, row_end};
 
-pub fn header(input: &str) -> IResult<&str, (NaiveDate, NaiveDate), VerboseError<&str>> {
+#[derive(Debug, PartialEq, Eq)]
+pub struct Header<'a> {
+    pub ledger_name: &'a str,
+    pub start_date: NaiveDate,
+    pub end_date: NaiveDate,
+}
+
+pub fn header(input: &str) -> IResult<&str, Header<'_>, VerboseError<&str>> {
     let (input, _) = line_tag("Account Transactions")(input)?;
-    let (input, _) = line_any_content(input)?; // "Personal" or company name
+    let (input, ledger_name) = line_any_content(input)?;
     let (input, date_range) = delimited(tag("Date Range: "), date_range, row_end)(input)?;
     let (input, _) = line_tag("Report Type: Accrual (Paid & Unpaid)")(input)?;
     let (input, _) = header_row(input)?;
 
-    Ok((input, date_range))
+    Ok((
+        input,
+        Header {
+            ledger_name: ledger_name,
+            start_date: date_range.0,
+            end_date: date_range.1,
+        },
+    ))
 }
 
 fn header_row(input: &str) -> IResult<&str, (), VerboseError<&str>> {
@@ -58,10 +72,11 @@ ACCOUNT NUMBER,DATE,DESCRIPTION,DEBIT (In Business Currency),CREDIT (In Business
             header(input),
             Ok((
                 ",...",
-                (
-                    NaiveDate::from_ymd_opt(2024, 1, 1).unwrap(),
-                    NaiveDate::from_ymd_opt(2024, 11, 30).unwrap(),
-                )
+                Header {
+                    ledger_name: "Personal",
+                    start_date: NaiveDate::from_ymd_opt(2024, 1, 1).unwrap(),
+                    end_date: NaiveDate::from_ymd_opt(2024, 11, 30).unwrap(),
+                },
             ))
         );
     }

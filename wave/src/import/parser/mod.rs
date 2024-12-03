@@ -15,13 +15,14 @@ mod header;
 
 #[derive(Debug, PartialEq, Eq)]
 pub struct WaveLedger {
+    pub ledger_name: String,
     pub start_date: NaiveDate,
     pub end_date: NaiveDate,
     pub accounts: Vec<account::Account>,
 }
 
 pub fn ledger(input: &str) -> IResult<&str, WaveLedger, VerboseError<&str>> {
-    let (input, (start_date, end_date)) = context("Failed to parse header", header::header)(input)?;
+    let (input, header) = context("Failed to parse header", header::header)(input)?;
     let (input, (accounts, _eof)) = context(
         "Failed to parse ledger accounts",
         all_consuming(many_till(
@@ -33,8 +34,9 @@ pub fn ledger(input: &str) -> IResult<&str, WaveLedger, VerboseError<&str>> {
     Ok((
         input,
         WaveLedger {
-            start_date,
-            end_date,
+            ledger_name: header.ledger_name.to_string(),
+            start_date: header.start_date,
+            end_date: header.end_date,
             accounts,
         },
     ))
@@ -80,6 +82,7 @@ Balance Change,,,$14.44,,"#;
             Ok((
                 "",
                 WaveLedger {
+                    ledger_name: "Personal".to_string(),
                     start_date: NaiveDate::from_ymd_opt(2024, 1, 1).unwrap(),
                     end_date: NaiveDate::from_ymd_opt(2024, 11, 30).unwrap(),
                     accounts: vec![
