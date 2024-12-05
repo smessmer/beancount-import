@@ -1,11 +1,7 @@
-use nom::{
-    combinator::map_res,
-    error::{context, VerboseError},
-    IResult,
-};
+use chumsky::{error::Simple, Parser as _};
 use rust_decimal::Decimal;
 
-use super::csv::cell;
+use super::csv::any_cell;
 
 #[derive(Debug, PartialEq, Eq, Clone, Copy)]
 pub struct Amount {
@@ -13,24 +9,26 @@ pub struct Amount {
     pub currency_symbol: char,
 }
 
-pub fn amount_cell(input: &str) -> IResult<&str, Amount, VerboseError<&str>> {
-    context(
-        "Failed to parse amount_cell",
-        map_res(cell, parse_amount_content),
-    )(input)
+pub fn amount_cell() -> impl chumsky::Parser<char, Amount, Error = Simple<char>> {
+    any_cell()
+        .try_map(|content, span| {
+            parse_amount_content(content).map_err(|msg| Simple::custom(span, msg))
+        })
+        .labelled("amount cell")
 }
 
-pub fn amount_cell_opt(input: &str) -> IResult<&str, Option<Amount>, VerboseError<&str>> {
-    context(
-        "Failed to parse amount_cell_opt",
-        map_res(cell, |content| {
+pub fn amount_cell_opt() -> impl chumsky::Parser<char, Option<Amount>, Error = Simple<char>> {
+    any_cell()
+        .try_map(|content, span| {
             if content.is_empty() {
                 Ok(None)
             } else {
-                parse_amount_content(content).map(Some)
+                Ok(Some(
+                    parse_amount_content(content).map_err(|msg| Simple::custom(span, msg))?,
+                ))
             }
-        }),
-    )(input)
+        })
+        .labelled("amount cell or empty cell")
 }
 
 fn parse_amount_content(mut content: String) -> Result<Amount, &'static str> {
@@ -41,7 +39,7 @@ fn parse_amount_content(mut content: String) -> Result<Amount, &'static str> {
         false
     };
     if content.is_empty() {
-        return Err("Empty amount");
+        return Err("Expected amount, found empty string");
     }
     let currency_symbol = match content.remove(0) {
         '$' => '$',
@@ -59,7 +57,10 @@ fn parse_amount_content(mut content: String) -> Result<Amount, &'static str> {
 
 #[cfg(test)]
 mod test {
+    use chumsky::Error as _;
     use rstest::rstest;
+
+    use crate::import::parser::utils::testutils::test_parser;
 
     use super::*;
 
@@ -70,6 +71,8 @@ mod test {
         #[values(("123.45", Decimal::new(12345, 2)), ("0.00", Decimal::new(0, 2)))]
         (input, expected): (&str, Decimal),
     ) {
+        use crate::import::parser::utils::testutils::test_parser;
+
         let input = if quoted {
             format!("\"{}{}\"", currency_symbol, input)
         } else {
@@ -79,79 +82,96 @@ mod test {
             amount: expected,
             currency_symbol,
         };
-        assert_eq!(amount_cell(&input), Ok(("", expected)));
-        assert_eq!(amount_cell_opt(&input), Ok(("", Some(expected))));
+        test_parser(&input, amount_cell(), expected, "");
+        test_parser(&input, amount_cell_opt(), Some(expected), "");
     }
 
     #[test]
     fn without_dollar_sign() {
-        assert!(amount_cell("123.45").is_err());
-        assert!(amount_cell_opt("123.45").is_err());
+        assert_eq!(
+            amount_cell().parse("123.45"),
+            Err(vec![Simple::custom(
+                0..6,
+                "Expected amount to start with dollar or euro sign"
+            )
+            .with_label("amount cell")])
+        );
+        assert_eq!(
+            amount_cell_opt().parse("123.45"),
+            Err(vec![Simple::custom(
+                0..6,
+                "Expected amount to start with dollar or euro sign"
+            )
+            .with_label("amount cell or empty cell")])
+        );
     }
 
     #[test]
     fn invalid_amount() {
-        assert!(amount_cell("$123.4.5").is_err());
-        assert!(amount_cell_opt("$123.4.5").is_err());
+        assert_eq!(
+            amount_cell().parse("$123.4.5"),
+            Err(vec![
+                Simple::custom(0..8, "Failed to parse amount").with_label("amount cell")
+            ])
+        );
+        assert_eq!(
+            amount_cell_opt().parse("$123.4.5"),
+            Err(vec![Simple::custom(0..8, "Failed to parse amount")
+                .with_label("amount cell or empty cell")])
+        );
     }
 
     #[test]
     fn with_space() {
-        assert!(amount_cell("$123.45 ").is_err());
-        assert!(amount_cell_opt("$123.45 ").is_err());
+        assert_eq!(
+            amount_cell().parse("$123.45 "),
+            Err(vec![
+                Simple::custom(0..8, "Failed to parse amount").with_label("amount cell")
+            ])
+        );
+        assert_eq!(
+            amount_cell_opt().parse("$123.45 "),
+            Err(vec![Simple::custom(0..8, "Failed to parse amount")
+                .with_label("amount cell or empty cell")])
+        );
     }
 
     #[test]
     fn with_thousand_separator() {
-        assert_eq!(
-            amount_cell("\"$1,234.56\""),
-            Ok((
-                "",
-                Amount {
-                    currency_symbol: '$',
-                    amount: Decimal::new(123456, 2),
-                }
-            ))
-        );
-        assert_eq!(
-            amount_cell_opt("\"$1,234.56\""),
-            Ok((
-                "",
-                Some(Amount {
-                    currency_symbol: '$',
-                    amount: Decimal::new(123456, 2),
-                })
-            ))
-        );
+        let input = "\"$1,234.56\"";
+        let expected = Amount {
+            amount: Decimal::new(123456, 2),
+            currency_symbol: '$',
+        };
+        test_parser(input, amount_cell(), expected, "");
+        test_parser(input, amount_cell_opt(), Some(expected), "");
     }
 
     #[test]
     fn empty_cell() {
-        assert!(amount_cell("").is_err());
-        assert_eq!(amount_cell_opt(""), Ok(("", None)));
+        assert_eq!(
+            amount_cell().parse(""),
+            Err(vec![Simple::custom(
+                0..0,
+                "Expected amount, found empty string"
+            )
+            .with_label("amount cell")])
+        );
+        assert!(amount_cell().parse("").is_err());
+        test_parser("", amount_cell_opt(), None, "");
+        test_parser(",", amount_cell_opt(), None, ",");
+        test_parser("\n", amount_cell_opt(), None, "\n");
+        test_parser("\r\n", amount_cell_opt(), None, "\r\n");
     }
 
     #[test]
     fn negative_amount() {
-        assert_eq!(
-            amount_cell("\"$-123.45\""),
-            Ok((
-                "",
-                Amount {
-                    currency_symbol: '$',
-                    amount: Decimal::new(-12345, 2)
-                }
-            ))
-        );
-        assert_eq!(
-            amount_cell_opt("\"$-123.45\""),
-            Ok((
-                "",
-                Some(Amount {
-                    currency_symbol: '$',
-                    amount: Decimal::new(-12345, 2)
-                })
-            ))
-        );
+        let input = "\"$-123.45\"";
+        let expected = Amount {
+            amount: Decimal::new(-12345, 2),
+            currency_symbol: '$',
+        };
+        test_parser(input, amount_cell(), expected, "");
+        test_parser(input, amount_cell_opt(), Some(expected), "");
     }
 }

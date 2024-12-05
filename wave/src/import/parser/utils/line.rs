@@ -6,7 +6,7 @@ use nom::{
     IResult,
 };
 
-use super::csv::row_end;
+use super::{chumsky_to_nom, csv::row_end};
 
 /// Matches a full line with fixed content
 pub fn line_tag(
@@ -15,7 +15,7 @@ pub fn line_tag(
     move |input| {
         context(
             "Failed to parse line_tag",
-            terminated(tag(expected_line), row_end),
+            terminated(tag(expected_line), chumsky_to_nom(row_end())),
         )(input)
     }
 }
@@ -24,7 +24,7 @@ pub fn line_tag(
 pub fn line_any_content(input: &str) -> IResult<&str, &str, VerboseError<&str>> {
     context(
         "Failed to parse line_any_content",
-        terminated(not_line_ending, row_end),
+        terminated(not_line_ending, chumsky_to_nom(row_end())),
     )(input)
 }
 

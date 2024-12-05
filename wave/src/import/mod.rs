@@ -1,5 +1,6 @@
 use anyhow::Result;
-use nom::{error::VerboseError, Finish, Parser};
+use ariadne::{Color, Fmt as _, Label, Report, ReportKind, Source};
+use nom::{error::VerboseError, Finish as _, Parser as _};
 use rust_decimal::{prelude::Zero, Decimal};
 use std::io::Read;
 
@@ -18,6 +19,21 @@ fn load_wave_ledger(mut input_stream: impl Read) -> Result<WaveLedger> {
     let mut content = String::new();
     input_stream.read_to_string(&mut content)?;
     let content = maybe_remove_byte_order_mark(content);
+    // match cell_tag_chumsky("Account Transactions")
+    //     .then(row_end_chumsky())
+    //     .then(cell_tag_chumsky("Personal"))
+    //     .then(row_end_chumsky())
+    //     .then(cell_tag_chumsky("Blub"))
+    //     .parse(content.as_str())
+    // {
+    //     Ok(_) => (),
+    //     Err(errors) => {
+    //         for err in errors {
+    //             print_parser_error(&content, err)
+    //         }
+    //     }
+    // }
+    // todo!();
     let (rest, parsed) = parser::ledger
         .parse(&content)
         .finish()
@@ -30,6 +46,69 @@ fn load_wave_ledger(mut input_stream: impl Read) -> Result<WaveLedger> {
         })?;
     assert_eq!("", rest);
     Ok(parsed)
+}
+
+fn print_parser_error(input: &str, err: chumsky::error::Simple<char>) {
+    // Taken from https://github.com/zesterer/chumsky/blob/0.9/examples/json.rs
+    let msg = if let chumsky::error::SimpleReason::Custom(msg) = err.reason() {
+        msg.clone()
+    } else {
+        format!(
+            "{}{}, expected {}",
+            if err.found().is_some() {
+                "Unexpected token"
+            } else {
+                "Unexpected end of input"
+            },
+            if let Some(label) = err.label() {
+                format!(" while parsing {}", label)
+            } else {
+                String::new()
+            },
+            if err.expected().len() == 0 {
+                "something else".to_string()
+            } else {
+                err.expected()
+                    .map(|expected| match expected {
+                        Some(expected) => expected.to_string(),
+                        None => "end of input".to_string(),
+                    })
+                    .collect::<Vec<_>>()
+                    .join(", ")
+            },
+        )
+    };
+
+    let report = Report::build(ReportKind::Error, err.span())
+        .with_message(msg)
+        .with_label(
+            Label::new(err.span())
+                .with_message(match err.reason() {
+                    chumsky::error::SimpleReason::Custom(msg) => msg.clone(),
+                    _ => format!(
+                        "Unexpected {}",
+                        err.found()
+                            .map(|c| format!("token {}", c.fg(Color::Red)))
+                            .unwrap_or_else(|| "end of input".to_string())
+                    ),
+                })
+                .with_color(Color::Red),
+        );
+
+    let report = match err.reason() {
+        chumsky::error::SimpleReason::Unclosed { span, delimiter } => report.with_label(
+            Label::new(span.clone())
+                .with_message(format!(
+                    "Unclosed delimiter {}",
+                    delimiter.fg(Color::Yellow)
+                ))
+                .with_color(Color::Yellow),
+        ),
+        chumsky::error::SimpleReason::Unexpected => report,
+        chumsky::error::SimpleReason::Custom(_) => report,
+    };
+
+    report.finish().print(Source::from(&input)).unwrap();
 }
 
 fn maybe_remove_byte_order_mark(mut content: String) -> String {

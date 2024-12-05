@@ -10,7 +10,7 @@ use nom::{
     IResult, Parser,
 };
 
-use super::cell;
+use super::{chumsky_to_nom, csv::any_cell};
 
 pub fn date(input: &str) -> IResult<&str, NaiveDate, VerboseError<&str>> {
     let digits = |expected_len: usize| {
@@ -47,7 +47,7 @@ pub fn date_range(input: &str) -> IResult<&str, (NaiveDate, NaiveDate), VerboseE
 pub fn date_cell(input: &str) -> IResult<&str, NaiveDate, VerboseError<&str>> {
     context(
         "Failed to parse date cell",
-        map_res(cell, move |cell_content| {
+        map_res(chumsky_to_nom(any_cell()), move |cell_content| {
             date(&cell_content)
                 .map(|(_, date)| date)
                 .map_err(|_| "Invalid date")

@@ -1,14 +1,15 @@
 use chrono::NaiveDate;
+use chumsky::Parser as _;
 use nom::{
     combinator::{all_consuming, cut, eof, opt, value},
     error::{context, VerboseError},
     multi::many_till,
-    sequence::{terminated, tuple},
+    sequence::terminated,
     IResult,
 };
 
 mod utils;
-use utils::{empty_cell, row_end};
+use utils::{chumsky_to_nom, empty_cell, row_end};
 
 mod account;
 mod header;
@@ -50,13 +51,13 @@ pub fn ledger(input: &str) -> IResult<&str, WaveLedger, VerboseError<&str>> {
 fn row_with_empty_cell(input: &str) -> IResult<&str, (), VerboseError<&str>> {
     context(
         "Failed to parse row_with_empty_cell",
-        value((), tuple((empty_cell, row_end))),
+        value((), chumsky_to_nom(empty_cell().then_ignore(row_end()))),
     )(input)
 }
 
 #[cfg(test)]
 mod tests {
-    use nom::error::{ErrorKind, VerboseErrorKind};
+    use nom::error::VerboseErrorKind;
     use rust_decimal::{prelude::Zero, Decimal};
 
     use super::*;
@@ -175,10 +176,7 @@ bla"#;
             ledger(input),
             Err(nom::Err::Failure(nom::error::VerboseError {
                 errors: vec![
-                    ("bla", VerboseErrorKind::Nom(ErrorKind::MapRes)),
-                    ("bla", VerboseErrorKind::Context("Failed to parse cell_tag")),
-                    ("bla", VerboseErrorKind::Context("Failed to parse empty_cell")),
-                    ("bla", VerboseErrorKind::Context("Failed to parse account_header_row")),
+                    ("bla", VerboseErrorKind::Context("chumsky")),
                     ("bla", VerboseErrorKind::Context("Failed to parse account")),
                     (",First Account,,,,\nStarting Balance,,,,,$123.45\n,2024-01-04,Some: Addition,$1.23,,$124.68\n,2024-04-04,Some: Withdrawal,,$15.67,$109.01\nTotals and Ending Balance,,,$1.23,$15.67,$109.01\nBalance Change,,,-$14.44,,\n\"\"\n,Second Account,,,,\nStarting Balance,,,,,$123.45\n,2024-01-04,Some: Withdrawal,,$1.23,$122.22\n,2024-04-04,Some: Addition,$15.67,,$137.89\nTotals and Ending Balance,,,$15.67,$1.23,$137.89\nBalance Change,,,$14.44,,\n\"\"\nbla", VerboseErrorKind::Context("Failed to parse ledger accounts"))]
             }))
@@ -194,18 +192,7 @@ bla"#;
             row_with_empty_cell("foo"),
             Err(nom::Err::Error(nom::error::VerboseError {
                 errors: vec![
-                    (
-                        "foo",
-                        nom::error::VerboseErrorKind::Nom(nom::error::ErrorKind::MapRes)
-                    ),
-                    (
-                        "foo",
-                        nom::error::VerboseErrorKind::Context("Failed to parse cell_tag")
-                    ),
-                    (
-                        "foo",
-                        nom::error::VerboseErrorKind::Context("Failed to parse empty_cell")
-                    ),
+                    ("foo", nom::error::VerboseErrorKind::Context("chumsky")),
                     (
                         "foo",
                         nom::error::VerboseErrorKind::Context(

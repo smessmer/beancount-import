@@ -8,7 +8,9 @@ use nom::{
     IResult,
 };
 
-use super::utils::{cell_tag, comma, date_range, line_any_content, line_tag, row_end};
+use super::utils::{
+    cell_tag, chumsky_to_nom, comma, date_range, line_any_content, line_tag, row_end,
+};
 
 #[derive(Debug, PartialEq, Eq, Clone, Copy)]
 pub enum ColumnSchema {
@@ -30,7 +32,8 @@ pub struct Header<'a> {
 pub fn header(input: &str) -> IResult<&str, Header<'_>, VerboseError<&str>> {
     let (input, _) = line_tag("Account Transactions")(input)?;
     let (input, ledger_name) = line_any_content(input)?;
-    let (input, date_range) = delimited(tag("Date Range: "), date_range, row_end)(input)?;
+    let (input, date_range) =
+        delimited(tag("Date Range: "), date_range, chumsky_to_nom(row_end()))(input)?;
     let (input, _) = line_tag("Report Type: Accrual (Paid & Unpaid)")(input)?;
     let (input, column_schema) = header_row(input)?;
 
@@ -47,34 +50,37 @@ pub fn header(input: &str) -> IResult<&str, Header<'_>, VerboseError<&str>> {
 
 fn header_row(input: &str) -> IResult<&str, ColumnSchema, VerboseError<&str>> {
     let header_start = tuple((
-        cell_tag("ACCOUNT NUMBER"),
-        comma,
-        cell_tag("DATE"),
-        comma,
-        cell_tag("DESCRIPTION"),
-        comma,
-        cell_tag("DEBIT (In Business Currency)"),
-        comma,
-        cell_tag("CREDIT (In Business Currency)"),
-        comma,
-        cell_tag("BALANCE (In Business Currency)"),
+        chumsky_to_nom(cell_tag("ACCOUNT NUMBER")),
+        chumsky_to_nom(comma()),
+        chumsky_to_nom(cell_tag("DATE")),
+        chumsky_to_nom(comma()),
+        chumsky_to_nom(cell_tag("DESCRIPTION")),
+        chumsky_to_nom(comma()),
+        chumsky_to_nom(cell_tag("DEBIT (In Business Currency)")),
+        chumsky_to_nom(comma()),
+        chumsky_to_nom(cell_tag("CREDIT (In Business Currency)")),
+        chumsky_to_nom(comma()),
+        chumsky_to_nom(cell_tag("BALANCE (In Business Currency)")),
     ));
-    let header_with_leger_currency = value(ColumnSchema::GlobalLedgerCurrency, row_end);
+    let header_with_leger_currency = value(
+        ColumnSchema::GlobalLedgerCurrency,
+        chumsky_to_nom(row_end()),
+    );
     let header_with_account_currency = value(
         ColumnSchema::PerAccountCurrency,
         tuple((
-            comma,
-            cell_tag("Business Currency"),
-            comma,
-            comma,
-            cell_tag("DEBIT (In Account Currency)"),
-            comma,
-            cell_tag("CREDIT (In Account Currency)"),
-            comma,
-            cell_tag("BALANCE (In Account Currency)"),
-            comma,
-            cell_tag("Account Currency"),
-            row_end,
+            chumsky_to_nom(comma()),
+            chumsky_to_nom(cell_tag("Business Currency")),
+            chumsky_to_nom(comma()),
+            chumsky_to_nom(comma()),
+            chumsky_to_nom(cell_tag("DEBIT (In Account Currency)")),
+            chumsky_to_nom(comma()),
+            chumsky_to_nom(cell_tag("CREDIT (In Account Currency)")),
+            chumsky_to_nom(comma()),
+            chumsky_to_nom(cell_tag("BALANCE (In Account Currency)")),
+            chumsky_to_nom(comma()),
+            chumsky_to_nom(cell_tag("Account Currency")),
+            chumsky_to_nom(row_end()),
         )),
     );
     context(

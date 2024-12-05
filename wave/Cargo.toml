@@ -15,6 +15,8 @@ serde = {version = "1.0.215", features = ["derive"]}
 dialoguer = "0.11.0"
 serde_yaml = "0.9.34"
 clap = {version = "4.5.21", features = ["derive"]}
+chumsky = {git = "https://github.com/smessmer/chumsky", rev = "7251cabb05b9d537f5ca92a9e1c1d64f9a8e59c0"}
+ariadne = "0.5.0"
 
 [dev-dependencies]
 rstest = "0.23.0"

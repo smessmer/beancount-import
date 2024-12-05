@@ -1,17 +1,21 @@
 use anyhow::{ensure, Result};
 use chrono::NaiveDate;
+use chumsky::Parser as _;
 use nom::{
     combinator::map_res,
     error::{context, VerboseError},
     multi::{count, many0},
     sequence::{delimited, preceded, terminated, tuple},
-    IResult,
+    IResult, Parser as _,
 };
 use rust_decimal::{prelude::Zero, Decimal};
 
 use super::{
     header::ColumnSchema,
-    utils::{amount_cell, amount_cell_opt, cell, cell_tag, comma, date_cell, empty_cell, row_end},
+    utils::{
+        amount_cell, amount_cell_opt, any_cell, cell_tag, chumsky_to_nom, comma, date_cell,
+        empty_cell, row_end,
+    },
 };
 
 #[derive(Debug, PartialEq, Eq)]
@@ -147,17 +151,19 @@ fn account_header_row(
         ColumnSchema::PerAccountCurrency => 10,
     };
     move |input| {
-        context(
-            "Failed to parse account_header_row",
-            delimited(
-                tuple((empty_cell, comma)),
-                cell,
-                tuple((
-                    count(tuple((comma, empty_cell)), num_commas_at_end),
-                    row_end,
-                )),
-            ),
-        )(input)
+        chumsky_to_nom(
+            empty_cell()
+                .then(comma())
+                .ignore_then(any_cell())
+                .then_ignore(
+                    comma()
+                        .ignore_then(empty_cell())
+                        .repeated()
+                        .exactly(num_commas_at_end)
+                        .ignore_then(row_end()),
+                ),
+        )
+        .parse(input)
     }
 }
 
@@ -166,34 +172,41 @@ fn starting_balance_row(
 ) -> impl Fn(&str) -> IResult<&str, Decimal, VerboseError<&str>> {
     move |input| {
         let amount_in_ledger_currency = preceded(
-            tuple((
-                cell_tag("Starting Balance"),
-                count(tuple((comma, empty_cell)), 4),
-                comma,
-            )),
-            amount_cell,
+            chumsky_to_nom(
+                cell_tag("Starting Balance").ignore_then(
+                    comma()
+                        .ignore_then(empty_cell())
+                        .repeated()
+                        .exactly(4)
+                        .ignore_then(comma()),
+                ),
+            ),
+            chumsky_to_nom(amount_cell()),
         );
         match column_schema {
             ColumnSchema::GlobalLedgerCurrency => context(
                 "Failed to parse starting_balance_row",
-                map_res(terminated(amount_in_ledger_currency, row_end), |amount| {
-                    ensure!(amount.currency_symbol == '$', "Currency symbol is not $");
-                    Ok(amount.amount)
-                }),
+                map_res(
+                    terminated(amount_in_ledger_currency, chumsky_to_nom(row_end())),
+                    |amount| {
+                        ensure!(amount.currency_symbol == '$', "Currency symbol is not $");
+                        Ok(amount.amount)
+                    },
+                ),
             )(input),
             ColumnSchema::PerAccountCurrency => context(
                 "Failed to parse starting_balance_row",
                 map_res(
                     tuple((
                         amount_in_ledger_currency,
-                        comma,
-                        cell,
-                        count(tuple((comma, empty_cell)), 3),
-                        comma,
-                        amount_cell,
-                        comma,
-                        cell,
-                        row_end,
+                        chumsky_to_nom(comma()),
+                        chumsky_to_nom(any_cell()),
+                        count(chumsky_to_nom(comma().ignore_then(empty_cell())), 3),
+                        chumsky_to_nom(comma()),
+                        chumsky_to_nom(amount_cell()),
+                        chumsky_to_nom(comma()),
+                        chumsky_to_nom(any_cell()),
+                        chumsky_to_nom(row_end()),
                     )),
                     |(
                         amount_in_ledger_currency,
@@ -231,19 +244,14 @@ fn posting_row(
     move |input| {
         let common_columns = map_res(
             tuple((
-                empty_cell,
-                comma,
+                chumsky_to_nom(empty_cell().ignore_then(comma())),
                 date_cell,
-                comma,
-                cell,
-                comma,
-                amount_cell_opt,
-                comma,
-                amount_cell_opt,
-                comma,
-                amount_cell,
+                chumsky_to_nom(comma().ignore_then(any_cell()).then_ignore(comma())),
+                chumsky_to_nom(amount_cell_opt().then_ignore(comma())),
+                chumsky_to_nom(amount_cell_opt().then_ignore(comma())),
+                chumsky_to_nom(amount_cell()),
             )),
-            |((), (), date, (), description, (), debit, (), credit, (), balance)| {
+            |((), date, description, debit, credit, balance)| {
                 let debit = match debit {
                     Some(debit) => {
                         // TODO Handle non-USD currencies
@@ -274,42 +282,32 @@ fn posting_row(
         match column_schema {
             ColumnSchema::GlobalLedgerCurrency => context(
                 "Failed to parse posting_row",
-                terminated(common_columns, row_end),
+                terminated(common_columns, chumsky_to_nom(row_end())),
             )(input),
             ColumnSchema::PerAccountCurrency => context(
                 "Failed to parse posting_row",
                 map_res(
                     tuple((
                         common_columns,
-                        comma,
-                        cell,
-                        comma,
-                        empty_cell,
-                        comma,
-                        amount_cell_opt,
-                        comma,
-                        amount_cell_opt,
-                        comma,
-                        amount_cell,
-                        comma,
-                        cell,
-                        row_end,
+                        chumsky_to_nom(
+                            comma()
+                                .ignore_then(any_cell())
+                                .then_ignore(comma())
+                                .then_ignore(empty_cell())
+                                .then_ignore(comma()),
+                        ),
+                        chumsky_to_nom(amount_cell_opt().then_ignore(comma())),
+                        chumsky_to_nom(amount_cell_opt().then_ignore(comma())),
+                        chumsky_to_nom(amount_cell()),
+                        chumsky_to_nom(comma().ignore_then(any_cell()).then_ignore(row_end())),
                     )),
                     |(
                         posting,
-                        (),
                         ledger_currency,
-                        (),
-                        (),
-                        (),
                         debit_in_account_currency,
-                        (),
                         credit_in_account_currency,
-                        (),
                         balance_in_account_currency,
-                        (),
                         account_currency,
-                        (),
                     )| {
                         ensure!(ledger_currency == "USD", "Ledger currency is not USD");
                         // TODO Handle non-USD account currencies
@@ -364,19 +362,21 @@ fn ending_balance_row(
     move |input| {
         let common_columns = map_res(
             tuple((
-                cell_tag("Totals and Ending Balance"),
-                comma,
-                empty_cell,
-                comma,
-                empty_cell,
-                comma,
-                amount_cell,
-                comma,
-                amount_cell,
-                comma,
-                amount_cell,
+                chumsky_to_nom(
+                    cell_tag("Totals and Ending Balance")
+                        .ignore_then(comma())
+                        .then_ignore(empty_cell())
+                        .then_ignore(comma())
+                        .then_ignore(empty_cell())
+                        .then_ignore(comma()),
+                ),
+                chumsky_to_nom(amount_cell()),
+                chumsky_to_nom(comma()),
+                chumsky_to_nom(amount_cell()),
+                chumsky_to_nom(comma()),
+                chumsky_to_nom(amount_cell()),
             )),
-            |(_, (), (), (), (), (), total_debit, (), total_credit, (), ending_balance)| {
+            |((), total_debit, (), total_credit, (), ending_balance)| {
                 ensure!(
                     total_debit.currency_symbol == '$',
                     "Currency symbol is not $"
@@ -399,7 +399,7 @@ fn ending_balance_row(
         match column_schema {
             ColumnSchema::GlobalLedgerCurrency => context(
                 "Failed to parse ending_balance_row",
-                terminated(common_columns, row_end),
+                terminated(common_columns, chumsky_to_nom(row_end())),
             )(input),
             ColumnSchema::PerAccountCurrency => {
                 context(
@@ -407,35 +407,25 @@ fn ending_balance_row(
                     map_res(
                         tuple((
                             common_columns,
-                            comma,
-                            cell,
-                            comma,
-                            empty_cell,
-                            comma,
-                            amount_cell,
-                            comma,
-                            amount_cell,
-                            comma,
-                            amount_cell,
-                            comma,
-                            cell,
-                            row_end,
+                            chumsky_to_nom(comma().ignore_then(any_cell()).then_ignore(
+                                comma().then_ignore(empty_cell()).then_ignore(comma()),
+                            )),
+                            chumsky_to_nom(amount_cell()),
+                            chumsky_to_nom(comma()),
+                            chumsky_to_nom(amount_cell()),
+                            chumsky_to_nom(comma()),
+                            chumsky_to_nom(amount_cell()),
+                            chumsky_to_nom(comma().ignore_then(any_cell()).then_ignore(row_end())),
                         )),
                         |(
                             ending_balance,
-                            (),
                             ledger_currency,
-                            (),
-                            (),
-                            (),
                             total_debit_in_account_currency,
                             (),
                             total_credit_in_account_currency,
                             (),
                             ending_balance_in_account_currency,
-                            (),
                             account_currency,
-                            (),
                         )| {
                             ensure!(ledger_currency == "USD", "Ledger currency is not USD");
                             // TODO Handle non-USD account currencies
@@ -478,59 +468,61 @@ fn balance_change_row(
 ) -> impl Fn(&str) -> IResult<&str, Decimal, VerboseError<&str>> {
     move |input| {
         let common_rows = delimited(
-            tuple((
-                cell_tag("Balance Change"),
-                comma,
-                empty_cell,
-                comma,
-                empty_cell,
-                comma,
-            )),
-            amount_cell,
-            tuple((comma, empty_cell, comma, empty_cell)),
+            chumsky_to_nom(
+                cell_tag("Balance Change")
+                    .then_ignore(comma())
+                    .then_ignore(empty_cell())
+                    .then_ignore(comma())
+                    .then_ignore(empty_cell())
+                    .then_ignore(comma()),
+            ),
+            chumsky_to_nom(amount_cell()),
+            chumsky_to_nom(
+                comma()
+                    .then_ignore(empty_cell())
+                    .then_ignore(comma())
+                    .then_ignore(empty_cell()),
+            ),
         );
         match column_schema {
             ColumnSchema::GlobalLedgerCurrency => context(
                 "Failed to parse balance_change_row",
-                map_res(terminated(common_rows, row_end), |amount| {
-                    ensure!(amount.currency_symbol == '$', "Currency symbol is not $");
-                    Ok(amount.amount)
-                }),
+                map_res(
+                    terminated(common_rows, chumsky_to_nom(row_end())),
+                    |amount| {
+                        ensure!(amount.currency_symbol == '$', "Currency symbol is not $");
+                        Ok(amount.amount)
+                    },
+                ),
             )(input),
             ColumnSchema::PerAccountCurrency => context(
                 "Failed to parse balance_change_row",
                 map_res(
                     tuple((
                         common_rows,
-                        comma,
-                        cell,
-                        comma,
-                        empty_cell,
-                        comma,
-                        amount_cell,
-                        comma,
-                        empty_cell,
-                        comma,
-                        empty_cell,
-                        comma,
-                        cell,
-                        row_end,
+                        chumsky_to_nom(
+                            comma()
+                                .ignore_then(any_cell())
+                                .then_ignore(comma())
+                                .then_ignore(empty_cell())
+                                .then_ignore(comma()),
+                        ),
+                        chumsky_to_nom(amount_cell()),
+                        chumsky_to_nom(
+                            comma()
+                                .then_ignore(empty_cell())
+                                .then_ignore(comma())
+                                .then_ignore(empty_cell())
+                                .then_ignore(comma())
+                                .ignore_then(any_cell())
+                                .then_ignore(row_end()),
+                        ),
                     )),
                     |(
                         balance_change,
-                        (),
                         ledger_currency,
-                        (),
-                        (),
-                        (),
                         balance_change_in_account_currency,
-                        (),
-                        (),
-                        (),
-                        (),
-                        (),
                         account_currency,
-                        (),
                     )| {
                         ensure!(ledger_currency == "USD", "Ledger currency is not USD");
                         // TODO Handle non-USD account currencies
