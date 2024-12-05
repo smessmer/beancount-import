@@ -7,37 +7,54 @@ use rust_decimal::Decimal;
 
 use super::csv::cell;
 
-pub fn amount_cell(input: &str) -> IResult<&str, Decimal, VerboseError<&str>> {
-    context("Failed to parse amount_cell", map_res(cell, parse_content))(input)
+#[derive(Debug, PartialEq, Eq, Clone, Copy)]
+pub struct Amount {
+    pub amount: Decimal,
+    pub currency_symbol: char,
 }
 
-pub fn amount_cell_opt(input: &str) -> IResult<&str, Option<Decimal>, VerboseError<&str>> {
+pub fn amount_cell(input: &str) -> IResult<&str, Amount, VerboseError<&str>> {
+    context(
+        "Failed to parse amount_cell",
+        map_res(cell, parse_amount_content),
+    )(input)
+}
+
+pub fn amount_cell_opt(input: &str) -> IResult<&str, Option<Amount>, VerboseError<&str>> {
     context(
         "Failed to parse amount_cell_opt",
         map_res(cell, |content| {
             if content.is_empty() {
                 Ok(None)
             } else {
-                parse_content(content).map(Some)
+                parse_amount_content(content).map(Some)
             }
         }),
     )(input)
 }
 
-fn parse_content(mut content: String) -> Result<Decimal, &'static str> {
+fn parse_amount_content(mut content: String) -> Result<Amount, &'static str> {
     let negative = if content.starts_with('-') {
         content.remove(0);
         true
     } else {
         false
     };
-    if !content.starts_with('$') {
-        return Err("Expected amount to start with dollar sign");
+    if content.is_empty() {
+        return Err("Empty amount");
     }
-    content.remove(0);
+    let currency_symbol = match content.remove(0) {
+        '$' => '$',
+        '€' => '€',
+        _ => return Err("Expected amount to start with dollar or euro sign"),
+    };
     let content = content.replace(',', "");
-    let result = Decimal::from_str_exact(&content).map_err(|_| "Failed to parse amount")?;
-    Ok(if negative { -result } else { result })
+    let amount = Decimal::from_str_exact(&content).map_err(|_| "Failed to parse amount")?;
+    let amount = if negative { -amount } else { amount };
+    Ok(Amount {
+        amount,
+        currency_symbol,
+    })
 }
 
 #[cfg(test)]
@@ -48,14 +65,19 @@ mod test {
 
     #[rstest]
     fn test_amount_cell(
+        #[values('$', '€')] currency_symbol: char,
         #[values(true, false)] quoted: bool,
         #[values(("123.45", Decimal::new(12345, 2)), ("0.00", Decimal::new(0, 2)))]
         (input, expected): (&str, Decimal),
     ) {
         let input = if quoted {
-            format!("\"${}\"", input)
+            format!("\"{}{}\"", currency_symbol, input)
         } else {
-            format!("${}", input)
+            format!("{}{}", currency_symbol, input)
+        };
+        let expected = Amount {
+            amount: expected,
+            currency_symbol,
         };
         assert_eq!(amount_cell(&input), Ok(("", expected)));
         assert_eq!(amount_cell_opt(&input), Ok(("", Some(expected))));
@@ -83,11 +105,23 @@ mod test {
     fn with_thousand_separator() {
         assert_eq!(
             amount_cell("\"$1,234.56\""),
-            Ok(("", Decimal::new(123456, 2)))
+            Ok((
+                "",
+                Amount {
+                    currency_symbol: '$',
+                    amount: Decimal::new(123456, 2),
+                }
+            ))
         );
         assert_eq!(
             amount_cell_opt("\"$1,234.56\""),
-            Ok(("", Some(Decimal::new(123456, 2))))
+            Ok((
+                "",
+                Some(Amount {
+                    currency_symbol: '$',
+                    amount: Decimal::new(123456, 2),
+                })
+            ))
         );
     }
 
@@ -101,11 +135,23 @@ mod test {
     fn negative_amount() {
         assert_eq!(
             amount_cell("\"$-123.45\""),
-            Ok(("", Decimal::new(-12345, 2)))
+            Ok((
+                "",
+                Amount {
+                    currency_symbol: '$',
+                    amount: Decimal::new(-12345, 2)
+                }
+            ))
         );
         assert_eq!(
             amount_cell_opt("\"$-123.45\""),
-            Ok(("", Some(Decimal::new(-12345, 2))))
+            Ok((
+                "",
+                Some(Amount {
+                    currency_symbol: '$',
+                    amount: Decimal::new(-12345, 2)
+                })
+            ))
         );
     }
 }

@@ -28,7 +28,10 @@ pub fn ledger(input: &str) -> IResult<&str, WaveLedger, VerboseError<&str>> {
     let (input, (accounts, _eof)) = context(
         "Failed to parse ledger accounts",
         all_consuming(many_till(
-            terminated(cut(account::account), opt(row_with_empty_cell)),
+            terminated(
+                cut(account::account(header.column_schema)),
+                opt(row_with_empty_cell),
+            ),
             eof,
         )),
     )(input)?;
