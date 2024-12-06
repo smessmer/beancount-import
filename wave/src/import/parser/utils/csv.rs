@@ -82,7 +82,9 @@ pub fn empty_cell() -> impl chumsky::Parser<char, (), Error = Simple<char>> {
 pub fn cell_tag<'a>(
     expected_content: &'a str,
 ) -> impl chumsky::Parser<char, (), Error = Simple<char>> + use<'a> {
-    cell(just(expected_content)).ignored()
+    cell(just(expected_content))
+        .ignored()
+        .labelled("cell with specific content")
 }
 
 pub fn comma() -> impl chumsky::Parser<char, (), Error = Simple<char>> {

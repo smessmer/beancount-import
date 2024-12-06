@@ -22,22 +22,22 @@ pub enum ColumnSchema {
 }
 
 #[derive(Debug, PartialEq, Eq)]
-pub struct Header<'a> {
-    pub ledger_name: &'a str,
+pub struct Header {
+    pub ledger_name: String,
     pub start_date: NaiveDate,
     pub end_date: NaiveDate,
     pub column_schema: ColumnSchema,
 }
 
-pub fn header(input: &str) -> IResult<&str, Header<'_>, VerboseError<&str>> {
-    let (input, _) = line_tag("Account Transactions")(input)?;
-    let (input, ledger_name) = line_any_content(input)?;
+pub fn header(input: &str) -> IResult<&str, Header, VerboseError<&str>> {
+    let (input, _) = chumsky_to_nom(line_tag("Account Transactions"))(input)?;
+    let (input, ledger_name) = chumsky_to_nom(line_any_content())(input)?;
     let (input, date_range) = delimited(
         tag("Date Range: "),
         chumsky_to_nom(date_range()),
         chumsky_to_nom(row_end()),
     )(input)?;
-    let (input, _) = line_tag("Report Type: Accrual (Paid & Unpaid)")(input)?;
+    let (input, _) = chumsky_to_nom(line_tag("Report Type: Accrual (Paid & Unpaid)"))(input)?;
     let (input, column_schema) = header_row(input)?;
 
     Ok((
@@ -112,7 +112,7 @@ ACCOUNT NUMBER,DATE,DESCRIPTION,DEBIT (In Business Currency),CREDIT (In Business
             Ok((
                 ",...",
                 Header {
-                    ledger_name: "Personal",
+                    ledger_name: "Personal".to_string(),
                     start_date: NaiveDate::from_ymd_opt(2024, 1, 1).unwrap(),
                     end_date: NaiveDate::from_ymd_opt(2024, 11, 30).unwrap(),
                     column_schema: ColumnSchema::GlobalLedgerCurrency,
@@ -134,7 +134,7 @@ ACCOUNT NUMBER,DATE,DESCRIPTION,DEBIT (In Business Currency),CREDIT (In Business
             Ok((
                 ",...",
                 Header {
-                    ledger_name: "Personal",
+                    ledger_name: "Personal".to_string(),
                     start_date: NaiveDate::from_ymd_opt(2024, 1, 1).unwrap(),
                     end_date: NaiveDate::from_ymd_opt(2024, 11, 30).unwrap(),
                     column_schema: ColumnSchema::PerAccountCurrency,
