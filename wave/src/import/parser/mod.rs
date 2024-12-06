@@ -25,7 +25,8 @@ pub struct WaveLedger {
 }
 
 pub fn ledger(input: &str) -> IResult<&str, WaveLedger, VerboseError<&str>> {
-    let (input, header) = context("Failed to parse header", header::header)(input)?;
+    let (input, header) =
+        context("Failed to parse header", chumsky_to_nom(header::header()))(input)?;
     let (input, (accounts, _eof)) = context(
         "Failed to parse ledger accounts",
         all_consuming(many_till(

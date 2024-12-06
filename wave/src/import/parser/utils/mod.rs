@@ -14,6 +14,8 @@ use nom::{
     error::{VerboseError, VerboseErrorKind},
     IResult,
 };
+#[cfg(test)]
+pub use testutils::test_parser;
 
 /// Convert a chumsky parser to a nom parser.
 /// WARNING: This currently only works for parsers that always consume at least one byte, the reason is https://github.com/zesterer/chumsky/issues/707

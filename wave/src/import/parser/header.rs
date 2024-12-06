@@ -1,16 +1,7 @@
 use chrono::NaiveDate;
-use nom::{
-    branch::alt,
-    bytes::complete::tag,
-    combinator::value,
-    error::{context, VerboseError},
-    sequence::{delimited, preceded, tuple},
-    IResult,
-};
+use chumsky::{error::Simple, prelude::just, Parser as _};
 
-use super::utils::{
-    cell_tag, chumsky_to_nom, comma, date_range, line_any_content, line_tag, row_end,
-};
+use super::utils::{cell_tag, comma, date_range, line_any_content, line_tag, row_end};
 
 #[derive(Debug, PartialEq, Eq, Clone, Copy)]
 pub enum ColumnSchema {
@@ -29,74 +20,63 @@ pub struct Header {
     pub column_schema: ColumnSchema,
 }
 
-pub fn header(input: &str) -> IResult<&str, Header, VerboseError<&str>> {
-    let (input, _) = chumsky_to_nom(line_tag("Account Transactions"))(input)?;
-    let (input, ledger_name) = chumsky_to_nom(line_any_content())(input)?;
-    let (input, date_range) = delimited(
-        tag("Date Range: "),
-        chumsky_to_nom(date_range()),
-        chumsky_to_nom(row_end()),
-    )(input)?;
-    let (input, _) = chumsky_to_nom(line_tag("Report Type: Accrual (Paid & Unpaid)"))(input)?;
-    let (input, column_schema) = header_row(input)?;
+pub fn header() -> impl chumsky::Parser<char, Header, Error = Simple<char>> {
+    let date_range_row = just("Date Range: ")
+        .ignore_then(date_range())
+        .then_ignore(row_end());
 
-    Ok((
-        input,
-        Header {
-            ledger_name: ledger_name,
+    line_tag("Account Transactions")
+        .ignore_then(line_any_content())
+        .then(date_range_row)
+        .then_ignore(line_tag("Report Type: Accrual (Paid & Unpaid)"))
+        .then(header_row())
+        .map(|((ledger_name, date_range), column_schema)| Header {
+            ledger_name,
             start_date: date_range.0,
             end_date: date_range.1,
             column_schema,
-        },
-    ))
+        })
+        .labelled("header")
 }
 
-fn header_row(input: &str) -> IResult<&str, ColumnSchema, VerboseError<&str>> {
-    let header_start = tuple((
-        chumsky_to_nom(cell_tag("ACCOUNT NUMBER")),
-        chumsky_to_nom(comma()),
-        chumsky_to_nom(cell_tag("DATE")),
-        chumsky_to_nom(comma()),
-        chumsky_to_nom(cell_tag("DESCRIPTION")),
-        chumsky_to_nom(comma()),
-        chumsky_to_nom(cell_tag("DEBIT (In Business Currency)")),
-        chumsky_to_nom(comma()),
-        chumsky_to_nom(cell_tag("CREDIT (In Business Currency)")),
-        chumsky_to_nom(comma()),
-        chumsky_to_nom(cell_tag("BALANCE (In Business Currency)")),
-    ));
-    let header_with_leger_currency = value(
-        ColumnSchema::GlobalLedgerCurrency,
-        chumsky_to_nom(row_end()),
-    );
-    let header_with_account_currency = value(
-        ColumnSchema::PerAccountCurrency,
-        tuple((
-            chumsky_to_nom(comma()),
-            chumsky_to_nom(cell_tag("Business Currency")),
-            chumsky_to_nom(comma()),
-            chumsky_to_nom(comma()),
-            chumsky_to_nom(cell_tag("DEBIT (In Account Currency)")),
-            chumsky_to_nom(comma()),
-            chumsky_to_nom(cell_tag("CREDIT (In Account Currency)")),
-            chumsky_to_nom(comma()),
-            chumsky_to_nom(cell_tag("BALANCE (In Account Currency)")),
-            chumsky_to_nom(comma()),
-            chumsky_to_nom(cell_tag("Account Currency")),
-            chumsky_to_nom(row_end()),
-        )),
-    );
-    context(
-        "Failed to parse header_row",
-        preceded(
-            header_start,
-            alt((header_with_leger_currency, header_with_account_currency)),
-        ),
-    )(input)
+fn header_row() -> impl chumsky::Parser<char, ColumnSchema, Error = Simple<char>> {
+    let header_start = cell_tag("ACCOUNT NUMBER")
+        .ignore_then(comma())
+        .ignore_then(cell_tag("DATE"))
+        .ignore_then(comma())
+        .ignore_then(cell_tag("DESCRIPTION"))
+        .ignore_then(comma())
+        .ignore_then(cell_tag("DEBIT (In Business Currency)"))
+        .ignore_then(comma())
+        .ignore_then(cell_tag("CREDIT (In Business Currency)"))
+        .ignore_then(comma())
+        .ignore_then(cell_tag("BALANCE (In Business Currency)"));
+
+    let header_with_ledger_currency = row_end().to(ColumnSchema::GlobalLedgerCurrency);
+
+    let header_with_account_currency = comma()
+        .ignore_then(cell_tag("Business Currency"))
+        .ignore_then(comma())
+        .ignore_then(comma())
+        .ignore_then(cell_tag("DEBIT (In Account Currency)"))
+        .ignore_then(comma())
+        .ignore_then(cell_tag("CREDIT (In Account Currency)"))
+        .ignore_then(comma())
+        .ignore_then(cell_tag("BALANCE (In Account Currency)"))
+        .ignore_then(comma())
+        .ignore_then(cell_tag("Account Currency"))
+        .ignore_then(row_end())
+        .to(ColumnSchema::PerAccountCurrency);
+
+    header_start
+        .ignore_then(header_with_ledger_currency.or(header_with_account_currency))
+        .labelled("csv header row")
 }
 
 #[cfg(test)]
 mod tests {
+    use crate::import::parser::utils::test_parser;
+
     use super::*;
 
     #[test]
@@ -107,17 +87,16 @@ Date Range: 2024-01-01 to 2024-11-30
 Report Type: Accrual (Paid & Unpaid)
 ACCOUNT NUMBER,DATE,DESCRIPTION,DEBIT (In Business Currency),CREDIT (In Business Currency),BALANCE (In Business Currency)
 ,..."#;
-        assert_eq!(
-            header(input),
-            Ok((
-                ",...",
-                Header {
-                    ledger_name: "Personal".to_string(),
-                    start_date: NaiveDate::from_ymd_opt(2024, 1, 1).unwrap(),
-                    end_date: NaiveDate::from_ymd_opt(2024, 11, 30).unwrap(),
-                    column_schema: ColumnSchema::GlobalLedgerCurrency,
-                },
-            ))
+        test_parser(
+            input,
+            header(),
+            Header {
+                ledger_name: "Personal".to_string(),
+                start_date: NaiveDate::from_ymd_opt(2024, 1, 1).unwrap(),
+                end_date: NaiveDate::from_ymd_opt(2024, 11, 30).unwrap(),
+                column_schema: ColumnSchema::GlobalLedgerCurrency,
+            },
+            ",...",
         );
     }
 
@@ -129,17 +108,16 @@ Date Range: 2024-01-01 to 2024-11-30
 Report Type: Accrual (Paid & Unpaid)
 ACCOUNT NUMBER,DATE,DESCRIPTION,DEBIT (In Business Currency),CREDIT (In Business Currency),BALANCE (In Business Currency),Business Currency,,DEBIT (In Account Currency),CREDIT (In Account Currency),BALANCE (In Account Currency),Account Currency
 ,..."#;
-        assert_eq!(
-            header(input),
-            Ok((
-                ",...",
-                Header {
-                    ledger_name: "Personal".to_string(),
-                    start_date: NaiveDate::from_ymd_opt(2024, 1, 1).unwrap(),
-                    end_date: NaiveDate::from_ymd_opt(2024, 11, 30).unwrap(),
-                    column_schema: ColumnSchema::PerAccountCurrency,
-                },
-            ))
+        test_parser(
+            input,
+            header(),
+            Header {
+                ledger_name: "Personal".to_string(),
+                start_date: NaiveDate::from_ymd_opt(2024, 1, 1).unwrap(),
+                end_date: NaiveDate::from_ymd_opt(2024, 11, 30).unwrap(),
+                column_schema: ColumnSchema::PerAccountCurrency,
+            },
+            ",...",
         );
     }
 }
