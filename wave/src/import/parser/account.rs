@@ -245,7 +245,7 @@ fn posting_row(
         let common_columns = map_res(
             tuple((
                 chumsky_to_nom(empty_cell().ignore_then(comma())),
-                date_cell,
+                chumsky_to_nom(date_cell()),
                 chumsky_to_nom(comma().ignore_then(any_cell()).then_ignore(comma())),
                 chumsky_to_nom(amount_cell_opt().then_ignore(comma())),
                 chumsky_to_nom(amount_cell_opt().then_ignore(comma())),

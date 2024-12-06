@@ -1,299 +1,282 @@
-use std::num::ParseIntError;
+use std::{ops::Range, str::FromStr};
 
 use chrono::NaiveDate;
-use nom::{
-    bytes::complete::tag,
-    character::complete::digit1,
-    combinator::map_res,
-    error::{context, VerboseError},
-    sequence::{separated_pair, tuple},
-    IResult, Parser,
+use chumsky::{
+    error::Simple,
+    prelude::{just, one_of},
+    Parser as _,
 };
 
-use super::{chumsky_to_nom, csv::any_cell};
+use super::csv::cell;
 
-pub fn date(input: &str) -> IResult<&str, NaiveDate, VerboseError<&str>> {
-    let digits = |expected_len: usize| {
-        map_res(digit1, move |parsed: &str| {
-            if parsed.len() == expected_len {
-                parsed
-                    .parse()
-                    .map_err(|_: ParseIntError| "Failed to parse integer")
-            } else {
-                Err("Invalid number of digits")
-            }
+pub fn date() -> impl chumsky::Parser<char, NaiveDate, Error = Simple<char>> {
+    let digit = || one_of("0123456789");
+    let separator = just('-');
+    let year = digit().repeated().exactly(4).try_map(parse_number::<i32>);
+    let month_or_day = || digit().repeated().exactly(2).try_map(parse_number::<u32>);
+    year.then_ignore(separator)
+        .then(month_or_day())
+        .then_ignore(separator)
+        .then(month_or_day())
+        .try_map(|((year, month), day), span| {
+            NaiveDate::from_ymd_opt(year, month, day)
+                .ok_or_else(|| Simple::custom(span, "Invalid date"))
         })
-    };
-    context(
-        "Failed to parse date",
-        map_res(
-            tuple((digits(4), tag("-"), digits(2), tag("-"), digits(2))),
-            |(year, _, month, _, day)| {
-                NaiveDate::from_ymd_opt(year, month as u32, day as u32)
-                    .ok_or_else(|| "Invalid date")
-            },
-        ),
-    )
-    .parse(input)
+        .labelled("date")
 }
 
-pub fn date_range(input: &str) -> IResult<&str, (NaiveDate, NaiveDate), VerboseError<&str>> {
-    context(
-        "Failed to parse date range",
-        separated_pair(date, tag(" to "), date),
-    )(input)
+fn parse_number<N: FromStr>(content: Vec<char>, span: Range<usize>) -> Result<N, Simple<char>> {
+    content
+        .into_iter()
+        .collect::<String>()
+        .parse()
+        .map_err(|_err| Simple::custom(span, "Failed to parse number"))
 }
 
-pub fn date_cell(input: &str) -> IResult<&str, NaiveDate, VerboseError<&str>> {
-    context(
-        "Failed to parse date cell",
-        map_res(chumsky_to_nom(any_cell()), move |cell_content| {
-            date(&cell_content)
-                .map(|(_, date)| date)
-                .map_err(|_| "Invalid date")
-        }),
-    )(input)
+pub fn date_range() -> impl chumsky::Parser<char, (NaiveDate, NaiveDate), Error = Simple<char>> {
+    date()
+        .then_ignore(just(" to "))
+        .then(date())
+        .labelled("date range")
+}
+
+pub fn date_cell() -> impl chumsky::Parser<char, NaiveDate, Error = Simple<char>> {
+    cell(date()).labelled("date cell")
 }
 
 #[cfg(test)]
 mod tests {
+    use chumsky::Error as _;
+
+    use crate::import::parser::utils::testutils::test_parser;
+
     use super::*;
 
     #[test]
     fn test_date() {
+        test_parser(
+            "2021-01-01",
+            date(),
+            NaiveDate::from_ymd_opt(2021, 1, 1).unwrap(),
+            "",
+        );
+        test_parser(
+            "2021-01-31",
+            date(),
+            NaiveDate::from_ymd_opt(2021, 1, 31).unwrap(),
+            "",
+        );
+        test_parser(
+            "2021-02-28",
+            date(),
+            NaiveDate::from_ymd_opt(2021, 2, 28).unwrap(),
+            "",
+        );
+
         assert_eq!(
-            date("2021-01-01"),
-            Ok(("", NaiveDate::from_ymd_opt(2021, 1, 1).unwrap()))
+            date().parse("2021-02-29"),
+            Err(vec![
+                Simple::custom(0..10, "Invalid date").with_label("date")
+            ])
+        );
+        test_parser(
+            "2021-12-31",
+            date(),
+            NaiveDate::from_ymd_opt(2021, 12, 31).unwrap(),
+            "",
+        );
+        test_parser(
+            "1980-05-14",
+            date(),
+            NaiveDate::from_ymd_opt(1980, 5, 14).unwrap(),
+            "",
         );
         assert_eq!(
-            date("2021-01-31"),
-            Ok(("", NaiveDate::from_ymd_opt(2021, 1, 31).unwrap()))
+            date().parse("1980-05-32"),
+            Err(vec![
+                Simple::custom(0..10, "Invalid date").with_label("date")
+            ])
         );
         assert_eq!(
-            date("2021-02-28"),
-            Ok(("", NaiveDate::from_ymd_opt(2021, 2, 28).unwrap()))
+            date().parse("1980-13-14"),
+            Err(vec![
+                Simple::custom(0..10, "Invalid date").with_label("date")
+            ])
         );
         assert_eq!(
-            date("2021-02-29"),
-            Err(nom::Err::Error(nom::error::VerboseError {
-                errors: vec![
-                    (
-                        "2021-02-29",
-                        nom::error::VerboseErrorKind::Nom(nom::error::ErrorKind::MapRes)
-                    ),
-                    (
-                        "2021-02-29",
-                        nom::error::VerboseErrorKind::Context("Failed to parse date")
-                    )
-                ]
-            }))
+            date().parse("1980-00-14"),
+            Err(vec![
+                Simple::custom(0..10, "Invalid date").with_label("date")
+            ])
         );
         assert_eq!(
-            date("2021-12-31"),
-            Ok(("", NaiveDate::from_ymd_opt(2021, 12, 31).unwrap()))
+            date().parse("1980-05-00"),
+            Err(vec![
+                Simple::custom(0..10, "Invalid date").with_label("date")
+            ])
         );
         assert_eq!(
-            date("1980-05-14"),
-            Ok(("", NaiveDate::from_ymd_opt(1980, 5, 14).unwrap()))
+            date().parse("1980-5-14"),
+            Err(vec![Simple::expected_input_found(
+                6..7,
+                [
+                    Some('8'),
+                    Some('0'),
+                    Some('2'),
+                    Some('5'),
+                    Some('9'),
+                    Some('7'),
+                    Some('3'),
+                    Some('4'),
+                    Some('6'),
+                    Some('1'),
+                ],
+                Some('-')
+            )
+            .with_label("date")])
         );
         assert_eq!(
-            date("1980-05-32"),
-            Err(nom::Err::Error(nom::error::VerboseError {
-                errors: vec![
-                    (
-                        "1980-05-32",
-                        nom::error::VerboseErrorKind::Nom(nom::error::ErrorKind::MapRes)
-                    ),
-                    (
-                        "1980-05-32",
-                        nom::error::VerboseErrorKind::Context("Failed to parse date")
-                    )
-                ]
-            }))
-        );
-        assert_eq!(
-            date("1980-13-14"),
-            Err(nom::Err::Error(nom::error::VerboseError {
-                errors: vec![
-                    (
-                        "1980-13-14",
-                        nom::error::VerboseErrorKind::Nom(nom::error::ErrorKind::MapRes)
-                    ),
-                    (
-                        "1980-13-14",
-                        nom::error::VerboseErrorKind::Context("Failed to parse date")
-                    )
-                ]
-            }))
-        );
-        assert_eq!(
-            date("1980-00-14"),
-            Err(nom::Err::Error(nom::error::VerboseError {
-                errors: vec![
-                    (
-                        "1980-00-14",
-                        nom::error::VerboseErrorKind::Nom(nom::error::ErrorKind::MapRes)
-                    ),
-                    (
-                        "1980-00-14",
-                        nom::error::VerboseErrorKind::Context("Failed to parse date")
-                    )
-                ]
-            }))
-        );
-        assert_eq!(
-            date("1980-05-00"),
-            Err(nom::Err::Error(nom::error::VerboseError {
-                errors: vec![
-                    (
-                        "1980-05-00",
-                        nom::error::VerboseErrorKind::Nom(nom::error::ErrorKind::MapRes)
-                    ),
-                    (
-                        "1980-05-00",
-                        nom::error::VerboseErrorKind::Context("Failed to parse date")
-                    )
-                ]
-            }))
-        );
-        assert_eq!(
-            date("1980-5-14"),
-            Err(nom::Err::Error(nom::error::VerboseError {
-                errors: vec![
-                    (
-                        "5-14",
-                        nom::error::VerboseErrorKind::Nom(nom::error::ErrorKind::MapRes)
-                    ),
-                    (
-                        "1980-5-14",
-                        nom::error::VerboseErrorKind::Context("Failed to parse date")
-                    )
-                ]
-            }))
-        );
-        assert_eq!(
-            date("1980-05-5"),
-            Err(nom::Err::Error(nom::error::VerboseError {
-                errors: vec![
-                    (
-                        "5",
-                        nom::error::VerboseErrorKind::Nom(nom::error::ErrorKind::MapRes)
-                    ),
-                    (
-                        "1980-05-5",
-                        nom::error::VerboseErrorKind::Context("Failed to parse date")
-                    )
-                ]
-            }))
+            date().parse("1980-05-5"),
+            Err(vec![Simple::expected_input_found(
+                9..9,
+                [
+                    Some('5'),
+                    Some('1'),
+                    Some('7'),
+                    Some('2'),
+                    Some('0'),
+                    Some('4'),
+                    Some('3'),
+                    Some('6'),
+                    Some('8'),
+                    Some('9'),
+                ],
+                None
+            )
+            .with_label("date")])
         );
     }
 
     #[test]
     fn test_date_range() {
-        assert_eq!(
-            date_range("2021-01-01 to 2021-01-31"),
-            Ok((
-                "",
-                (
-                    NaiveDate::from_ymd_opt(2021, 1, 1).unwrap(),
-                    NaiveDate::from_ymd_opt(2021, 1, 31).unwrap()
-                )
-            ))
+        test_parser(
+            "2021-01-01 to 2021-01-31",
+            date_range(),
+            (
+                NaiveDate::from_ymd_opt(2021, 1, 1).unwrap(),
+                NaiveDate::from_ymd_opt(2021, 1, 31).unwrap(),
+            ),
+            "",
         );
-        assert_eq!(
-            date_range("2021-01-01 to 2021-12-31"),
-            Ok((
-                "",
-                (
-                    NaiveDate::from_ymd_opt(2021, 1, 1).unwrap(),
-                    NaiveDate::from_ymd_opt(2021, 12, 31).unwrap()
-                )
-            ))
+        test_parser(
+            "2021-01-01 to 2021-12-31",
+            date_range(),
+            (
+                NaiveDate::from_ymd_opt(2021, 1, 1).unwrap(),
+                NaiveDate::from_ymd_opt(2021, 12, 31).unwrap(),
+            ),
+            "",
         );
-        assert_eq!(
-            date_range("2021-01-01 to 2021-12-31 "),
-            Ok((
-                " ",
-                (
-                    NaiveDate::from_ymd_opt(2021, 1, 1).unwrap(),
-                    NaiveDate::from_ymd_opt(2021, 12, 31).unwrap()
-                )
-            ))
+        test_parser(
+            "2021-01-01 to 2021-12-31 ",
+            date_range(),
+            (
+                NaiveDate::from_ymd_opt(2021, 1, 1).unwrap(),
+                NaiveDate::from_ymd_opt(2021, 12, 31).unwrap(),
+            ),
+            " ",
         );
-        assert_eq!(
-            date_range("2021-01-01 to 2021-12-31\n"),
-            Ok((
-                "\n",
-                (
-                    NaiveDate::from_ymd_opt(2021, 1, 1).unwrap(),
-                    NaiveDate::from_ymd_opt(2021, 12, 31).unwrap()
-                )
-            ))
+        test_parser(
+            "2021-01-01 to 2021-12-31\n",
+            date_range(),
+            (
+                NaiveDate::from_ymd_opt(2021, 1, 1).unwrap(),
+                NaiveDate::from_ymd_opt(2021, 12, 31).unwrap(),
+            ),
+            "\n",
         );
-        assert_eq!(
-            date_range("2021-01-01 to 2021-12-31\n "),
-            Ok((
-                "\n ",
-                (
-                    NaiveDate::from_ymd_opt(2021, 1, 1).unwrap(),
-                    NaiveDate::from_ymd_opt(2021, 12, 31).unwrap()
-                )
-            ))
+        test_parser(
+            "2021-01-01 to 2021-12-31\n ",
+            date_range(),
+            (
+                NaiveDate::from_ymd_opt(2021, 1, 1).unwrap(),
+                NaiveDate::from_ymd_opt(2021, 12, 31).unwrap(),
+            ),
+            "\n ",
         );
-        assert_eq!(
-            date_range("2021-01-01 to 2021-12-31\n\n"),
-            Ok((
-                "\n\n",
-                (
-                    NaiveDate::from_ymd_opt(2021, 1, 1).unwrap(),
-                    NaiveDate::from_ymd_opt(2021, 12, 31).unwrap()
-                )
-            ))
+        test_parser(
+            "2021-01-01 to 2021-12-31\n\n",
+            date_range(),
+            (
+                NaiveDate::from_ymd_opt(2021, 1, 1).unwrap(),
+                NaiveDate::from_ymd_opt(2021, 12, 31).unwrap(),
+            ),
+            "\n\n",
         );
     }
 
     #[test]
     fn test_date_cell() {
-        assert_eq!(
-            date_cell("2021-01-01"),
-            Ok(("", NaiveDate::from_ymd_opt(2021, 1, 1).unwrap()))
+        test_parser(
+            "2021-01-01",
+            date_cell(),
+            NaiveDate::from_ymd_opt(2021, 1, 1).unwrap(),
+            "",
         );
-        assert_eq!(
-            date_cell("2021-01-01,"),
-            Ok((",", NaiveDate::from_ymd_opt(2021, 1, 1).unwrap()))
+        test_parser(
+            "2021-01-01,",
+            date_cell(),
+            NaiveDate::from_ymd_opt(2021, 1, 1).unwrap(),
+            ",",
         );
-        assert_eq!(
-            date_cell("2021-01-01,foo"),
-            Ok((",foo", NaiveDate::from_ymd_opt(2021, 1, 1).unwrap()))
+        test_parser(
+            "2021-01-01,foo",
+            date_cell(),
+            NaiveDate::from_ymd_opt(2021, 1, 1).unwrap(),
+            ",foo",
         );
-        assert_eq!(
-            date_cell("2021-01-01\nfoo"),
-            Ok(("\nfoo", NaiveDate::from_ymd_opt(2021, 1, 1).unwrap()))
+        test_parser(
+            "2021-01-01\nfoo",
+            date_cell(),
+            NaiveDate::from_ymd_opt(2021, 1, 1).unwrap(),
+            "\nfoo",
         );
-        assert_eq!(
-            date_cell("2021-01-01\rfoo"),
-            Ok(("\rfoo", NaiveDate::from_ymd_opt(2021, 1, 1).unwrap()))
+        test_parser(
+            "2021-01-01\rfoo",
+            date_cell(),
+            NaiveDate::from_ymd_opt(2021, 1, 1).unwrap(),
+            "\rfoo",
         );
 
-        assert_eq!(
-            date_cell("\"2021-01-01\""),
-            Ok(("", NaiveDate::from_ymd_opt(2021, 1, 1).unwrap()))
+        test_parser(
+            "\"2021-01-01\"",
+            date_cell(),
+            NaiveDate::from_ymd_opt(2021, 1, 1).unwrap(),
+            "",
         );
-        assert_eq!(
-            date_cell("\"2021-01-01\","),
-            Ok((",", NaiveDate::from_ymd_opt(2021, 1, 1).unwrap()))
+        test_parser(
+            "\"2021-01-01\",",
+            date_cell(),
+            NaiveDate::from_ymd_opt(2021, 1, 1).unwrap(),
+            ",",
         );
-        assert_eq!(
-            date_cell("\"2021-01-01\",foo"),
-            Ok((",foo", NaiveDate::from_ymd_opt(2021, 1, 1).unwrap()))
+        test_parser(
+            "\"2021-01-01\",foo",
+            date_cell(),
+            NaiveDate::from_ymd_opt(2021, 1, 1).unwrap(),
+            ",foo",
         );
-        assert_eq!(
-            date_cell("\"2021-01-01\"\nfoo"),
-            Ok(("\nfoo", NaiveDate::from_ymd_opt(2021, 1, 1).unwrap()))
+        test_parser(
+            "\"2021-01-01\"\nfoo",
+            date_cell(),
+            NaiveDate::from_ymd_opt(2021, 1, 1).unwrap(),
+            "\nfoo",
         );
-        assert_eq!(
-            date_cell("\"2021-01-01\"\rfoo"),
-            Ok(("\rfoo", NaiveDate::from_ymd_opt(2021, 1, 1).unwrap()))
+        test_parser(
+            "\"2021-01-01\"\rfoo",
+            date_cell(),
+            NaiveDate::from_ymd_opt(2021, 1, 1).unwrap(),
+            "\rfoo",
         );
     }
 }

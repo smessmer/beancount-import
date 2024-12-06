@@ -32,8 +32,11 @@ pub struct Header<'a> {
 pub fn header(input: &str) -> IResult<&str, Header<'_>, VerboseError<&str>> {
     let (input, _) = line_tag("Account Transactions")(input)?;
     let (input, ledger_name) = line_any_content(input)?;
-    let (input, date_range) =
-        delimited(tag("Date Range: "), date_range, chumsky_to_nom(row_end()))(input)?;
+    let (input, date_range) = delimited(
+        tag("Date Range: "),
+        chumsky_to_nom(date_range()),
+        chumsky_to_nom(row_end()),
+    )(input)?;
     let (input, _) = line_tag("Report Type: Accrual (Paid & Unpaid)")(input)?;
     let (input, column_schema) = header_row(input)?;
 
