@@ -8,7 +8,7 @@ use chrono::NaiveDate;
 use rust_decimal::{prelude::Zero as _, Decimal};
 
 pub const LEDGER_CURRENCY: &str = "USD";
-pub const LEDGER_CURRENCY_SYMBOL: char = '$';
+pub const LEDGER_CURRENCY_SYMBOL: &str = "$";
 
 #[derive(Debug, Clone)]
 pub struct Ledger {

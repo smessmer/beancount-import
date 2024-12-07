@@ -11,10 +11,12 @@ use super::{
 };
 use crate::ir::{Amount, LEDGER_CURRENCY, LEDGER_CURRENCY_SYMBOL};
 
-fn currency_symbol(currency: &str) -> Result<char, String> {
+fn currency_symbol(currency: &str) -> Result<&'static str, String> {
     match currency {
-        "USD" => Ok('$'),
-        "EUR" => Ok('€'),
+        "USD" => Ok("$"),
+        "EUR" => Ok("€"),
+        "GBP" => Ok("£"),
+        "CHF" => Ok("CHF"),
         _ => Err(format!("Unexpected currency {currency}")),
     }
 }
