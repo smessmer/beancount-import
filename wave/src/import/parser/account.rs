@@ -674,10 +674,8 @@ mod tests {
         );
     }
 
-    // TODO Add peraccount_schema variants of the following tests
-
     #[test]
-    fn test_account_empty() {
+    fn given_global_schema_test_account_empty() {
         let input = r#",My Bank Account,,,,
 Starting Balance,,,,,$12.34
 Totals and Ending Balance,,,$0.00,$0.00,"$12.34"
@@ -701,7 +699,31 @@ Balance Change,,,"$0.0",,"#;
     }
 
     #[test]
-    fn test_account_valid_with_negative_change() {
+    fn given_peraccount_schema_test_account_empty() {
+        let input = r#",My Bank Account,,,,,,,,,,
+Starting Balance,,,,,$12.34,USD,,,,$12.34,USD
+Totals and Ending Balance,,,"$0.00","$0.00","$12.34",USD,,"$0.00","$0.00","$12.34",USD
+Balance Change,,,"$0.00",,,USD,,"$0.00",,,USD"#;
+        test_parser(
+            input,
+            account(ColumnSchema::PerAccountCurrency),
+            Account {
+                name: "My Bank Account".to_string(),
+                starting_balance: Decimal::new(1234, 2),
+                postings: vec![],
+                ending_balance: EndingBalance {
+                    total_debit: Decimal::zero(),
+                    total_credit: Decimal::zero(),
+                    ending_balance: Decimal::new(1234, 2),
+                },
+                balance_change: Decimal::zero(),
+            },
+            "",
+        );
+    }
+
+    #[test]
+    fn given_global_schema_test_account_valid_with_negative_change() {
         let input = r#",Some Account,,,,
 Starting Balance,,,,,$123.45
 ,2024-01-04,Some: Addition,$1.23,,$124.68
@@ -742,7 +764,48 @@ Balance Change,,,-$14.44,,"#;
     }
 
     #[test]
-    fn test_account_valid_with_positive_change() {
+    fn given_peraccount_schema_test_account_valid_with_negative_change() {
+        let input = r#",Some Account,,,,,,,,,,
+Starting Balance,,,,,$123.45,USD,,,,$123.45,USD
+,2024-01-04,Some: Addition,$1.23,,$124.68,USD,,$1.23,,$124.68,USD
+,2024-04-04,Some: Withdrawal,,$15.67,$109.01,USD,,,$15.67,$109.01,USD
+Totals and Ending Balance,,,$1.23,$15.67,$109.01,USD,,$1.23,$15.67,$109.01,USD
+Balance Change,,,-$14.44,,,USD,,-$14.44,,,USD"#;
+        test_parser(
+            input,
+            account(ColumnSchema::PerAccountCurrency),
+            Account {
+                name: "Some Account".to_string(),
+                starting_balance: Decimal::new(12345, 2),
+                postings: vec![
+                    Posting {
+                        date: NaiveDate::from_ymd_opt(2024, 1, 4).unwrap(),
+                        description: "Some: Addition".to_string(),
+                        debit: Decimal::new(123, 2),
+                        credit: Decimal::zero(),
+                        balance: Decimal::new(12468, 2),
+                    },
+                    Posting {
+                        date: NaiveDate::from_ymd_opt(2024, 4, 4).unwrap(),
+                        description: "Some: Withdrawal".to_string(),
+                        debit: Decimal::zero(),
+                        credit: Decimal::new(1567, 2),
+                        balance: Decimal::new(10901, 2),
+                    },
+                ],
+                ending_balance: EndingBalance {
+                    total_debit: Decimal::new(123, 2),
+                    total_credit: Decimal::new(1567, 2),
+                    ending_balance: Decimal::new(10901, 2),
+                },
+                balance_change: Decimal::new(-1444, 2),
+            },
+            "",
+        );
+    }
+
+    #[test]
+    fn given_global_schema_test_account_valid_with_positive_change() {
         let input = r#",Some Account,,,,
 Starting Balance,,,,,$123.45
 ,2024-01-04,Some: Withdrawal,,$1.23,$122.22
@@ -752,6 +815,47 @@ Balance Change,,,$14.44,,"#;
         test_parser(
             input,
             account(ColumnSchema::GlobalLedgerCurrency),
+            Account {
+                name: "Some Account".to_string(),
+                starting_balance: Decimal::new(12345, 2),
+                postings: vec![
+                    Posting {
+                        date: NaiveDate::from_ymd_opt(2024, 1, 4).unwrap(),
+                        description: "Some: Withdrawal".to_string(),
+                        debit: Decimal::zero(),
+                        credit: Decimal::new(123, 2),
+                        balance: Decimal::new(12222, 2),
+                    },
+                    Posting {
+                        date: NaiveDate::from_ymd_opt(2024, 4, 4).unwrap(),
+                        description: "Some: Addition".to_string(),
+                        debit: Decimal::new(1567, 2),
+                        credit: Decimal::zero(),
+                        balance: Decimal::new(13789, 2),
+                    },
+                ],
+                ending_balance: EndingBalance {
+                    total_debit: Decimal::new(1567, 2),
+                    total_credit: Decimal::new(123, 2),
+                    ending_balance: Decimal::new(13789, 2),
+                },
+                balance_change: Decimal::new(1444, 2),
+            },
+            "",
+        )
+    }
+
+    #[test]
+    fn given_peraccount_schema_test_account_valid_with_positive_change() {
+        let input = r#",Some Account,,,,,,,,,,
+Starting Balance,,,,,$123.45,USD,,,,$123.45,USD
+,2024-01-04,Some: Withdrawal,,$1.23,$122.22,USD,,,$1.23,$122.22,USD
+,2024-04-04,Some: Addition,$15.67,,$137.89,USD,,$15.67,,$137.89,USD
+Totals and Ending Balance,,,$15.67,$1.23,$137.89,USD,,$15.67,$1.23,$137.89,USD
+Balance Change,,,$14.44,,,USD,,$14.44,,,USD"#;
+        test_parser(
+            input,
+            account(ColumnSchema::PerAccountCurrency),
             Account {
                 name: "Some Account".to_string(),
                 starting_balance: Decimal::new(12345, 2),
