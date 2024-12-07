@@ -45,7 +45,12 @@ mod tests {
     use utils::test_parser;
 
     use super::*;
-    use crate::import::parser::account::{Account, EndingBalance, Posting};
+    use crate::{
+        import::parser::account::{Account, EndingBalance, Posting},
+        ir::{Amount, LEDGER_CURRENCY},
+    };
+
+    // TODO Add tests for ledgers with per-account currencies
 
     #[test]
     fn test_ledger() {
@@ -77,55 +82,123 @@ Balance Change,,,$14.44,,"#;
                 accounts: vec![
                     Account {
                         name: "First Account".to_string(),
-                        starting_balance: Decimal::new(12345, 2),
+                        account_currency: LEDGER_CURRENCY.to_string(),
+                        starting_balance: Amount {
+                            in_account_currency: Decimal::new(12345, 2),
+                            in_ledger_currency: Decimal::new(12345, 2),
+                        },
                         postings: vec![
                             Posting {
                                 date: NaiveDate::from_ymd_opt(2024, 1, 4).unwrap(),
                                 description: "Some: Addition".to_string(),
-                                debit: Decimal::new(123, 2),
-                                credit: Decimal::zero(),
-                                balance: Decimal::new(12468, 2),
+                                debit: Amount {
+                                    in_ledger_currency: Decimal::new(123, 2),
+                                    in_account_currency: Decimal::new(123, 2),
+                                },
+                                credit: Amount {
+                                    in_ledger_currency: Decimal::zero(),
+                                    in_account_currency: Decimal::zero(),
+                                },
+                                balance: Amount {
+                                    in_ledger_currency: Decimal::new(12468, 2),
+                                    in_account_currency: Decimal::new(12468, 2),
+                                },
                             },
                             Posting {
                                 date: NaiveDate::from_ymd_opt(2024, 4, 4).unwrap(),
                                 description: "Some: Withdrawal".to_string(),
-                                debit: Decimal::zero(),
-                                credit: Decimal::new(1567, 2),
-                                balance: Decimal::new(10901, 2),
+                                debit: Amount {
+                                    in_ledger_currency: Decimal::zero(),
+                                    in_account_currency: Decimal::zero(),
+                                },
+                                credit: Amount {
+                                    in_ledger_currency: Decimal::new(1567, 2),
+                                    in_account_currency: Decimal::new(1567, 2),
+                                },
+                                balance: Amount {
+                                    in_ledger_currency: Decimal::new(10901, 2),
+                                    in_account_currency: Decimal::new(10901, 2),
+                                },
                             },
                         ],
                         ending_balance: EndingBalance {
-                            total_debit: Decimal::new(123, 2),
-                            total_credit: Decimal::new(1567, 2),
-                            ending_balance: Decimal::new(10901, 2),
+                            total_debit: Amount {
+                                in_ledger_currency: Decimal::new(123, 2),
+                                in_account_currency: Decimal::new(123, 2),
+                            },
+                            total_credit: Amount {
+                                in_ledger_currency: Decimal::new(1567, 2),
+                                in_account_currency: Decimal::new(1567, 2),
+                            },
+                            ending_balance: Amount {
+                                in_ledger_currency: Decimal::new(10901, 2),
+                                in_account_currency: Decimal::new(10901, 2),
+                            },
                         },
-                        balance_change: Decimal::new(-1444, 2),
+                        balance_change: Amount {
+                            in_ledger_currency: Decimal::new(-1444, 2),
+                            in_account_currency: Decimal::new(-1444, 2),
+                        },
                     },
                     Account {
                         name: "Second Account".to_string(),
-                        starting_balance: Decimal::new(12345, 2),
+                        account_currency: LEDGER_CURRENCY.to_string(),
+                        starting_balance: Amount {
+                            in_ledger_currency: Decimal::new(12345, 2),
+                            in_account_currency: Decimal::new(12345, 2),
+                        },
                         postings: vec![
                             Posting {
                                 date: NaiveDate::from_ymd_opt(2024, 1, 4).unwrap(),
                                 description: "Some: Withdrawal".to_string(),
-                                debit: Decimal::zero(),
-                                credit: Decimal::new(123, 2),
-                                balance: Decimal::new(12222, 2),
+                                debit: Amount {
+                                    in_ledger_currency: Decimal::zero(),
+                                    in_account_currency: Decimal::zero(),
+                                },
+                                credit: Amount {
+                                    in_ledger_currency: Decimal::new(123, 2),
+                                    in_account_currency: Decimal::new(123, 2),
+                                },
+                                balance: Amount {
+                                    in_ledger_currency: Decimal::new(12222, 2),
+                                    in_account_currency: Decimal::new(12222, 2),
+                                },
                             },
                             Posting {
                                 date: NaiveDate::from_ymd_opt(2024, 4, 4).unwrap(),
                                 description: "Some: Addition".to_string(),
-                                debit: Decimal::new(1567, 2),
-                                credit: Decimal::zero(),
-                                balance: Decimal::new(13789, 2),
+                                debit: Amount {
+                                    in_ledger_currency: Decimal::new(1567, 2),
+                                    in_account_currency: Decimal::new(1567, 2),
+                                },
+                                credit: Amount {
+                                    in_ledger_currency: Decimal::zero(),
+                                    in_account_currency: Decimal::zero(),
+                                },
+                                balance: Amount {
+                                    in_ledger_currency: Decimal::new(13789, 2),
+                                    in_account_currency: Decimal::new(13789, 2),
+                                },
                             },
                         ],
                         ending_balance: EndingBalance {
-                            total_debit: Decimal::new(1567, 2),
-                            total_credit: Decimal::new(123, 2),
-                            ending_balance: Decimal::new(13789, 2),
+                            total_debit: Amount {
+                                in_ledger_currency: Decimal::new(1567, 2),
+                                in_account_currency: Decimal::new(1567, 2),
+                            },
+                            total_credit: Amount {
+                                in_ledger_currency: Decimal::new(123, 2),
+                                in_account_currency: Decimal::new(123, 2),
+                            },
+                            ending_balance: Amount {
+                                in_ledger_currency: Decimal::new(13789, 2),
+                                in_account_currency: Decimal::new(13789, 2),
+                            },
                         },
-                        balance_change: Decimal::new(1444, 2),
+                        balance_change: Amount {
+                            in_ledger_currency: Decimal::new(1444, 2),
+                            in_account_currency: Decimal::new(1444, 2),
+                        },
                     },
                 ],
             },

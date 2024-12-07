@@ -1,14 +1,13 @@
 use anyhow::Result;
 use ariadne::{Color, Fmt as _, Label, Report, ReportKind, Source};
 use chumsky::Parser as _;
-use rust_decimal::{prelude::Zero, Decimal};
 use std::io::Read;
 
 mod parser;
 
 use parser::{AccountType, WaveLedger};
 
-use crate::ir::{AccountBalance, Dates, Ledger, Posting, Transaction};
+use crate::ir::{AccountBalance, Amount, Dates, Ledger, Posting, Transaction};
 
 pub fn load(input_stream: impl Read) -> Result<Ledger> {
     let wave_ledger = load_wave_ledger(input_stream)?;
@@ -116,16 +115,19 @@ fn to_ir(ledger: WaveLedger) -> Result<Ledger> {
                     Some(AccountType::Debit) => AccountBalance {
                         start_balance: account.starting_balance,
                         end_balance: account.ending_balance.ending_balance,
+                        account_currency: account.account_currency.clone(),
                     },
                     Some(AccountType::Credit) => AccountBalance {
                         start_balance: -account.starting_balance,
                         end_balance: -account.ending_balance.ending_balance,
+                        account_currency: account.account_currency.clone(),
                     },
                     None => {
                         if account.starting_balance.is_zero() && account.ending_balance.ending_balance.is_zero() {
                             AccountBalance {
-                                start_balance: Decimal::zero(),
-                                end_balance: Decimal::zero(),
+                                start_balance: Amount::zero(),
+                                end_balance: Amount::zero(),
+                                account_currency: account.account_currency.clone(),
                             }
                         } else {
                             anyhow::bail!(

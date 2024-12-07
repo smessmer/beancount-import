@@ -1,7 +1,14 @@
-use std::collections::{HashMap, HashSet};
+use std::{
+    collections::{HashMap, HashSet},
+    iter::Sum,
+    ops::{Add, AddAssign, Neg, Sub},
+};
 
 use chrono::NaiveDate;
-use rust_decimal::Decimal;
+use rust_decimal::{prelude::Zero as _, Decimal};
+
+pub const LEDGER_CURRENCY: &str = "USD";
+pub const LEDGER_CURRENCY_SYMBOL: char = '$';
 
 #[derive(Debug, Clone)]
 pub struct Ledger {
@@ -25,10 +32,76 @@ impl Ledger {
     }
 }
 
+#[derive(Debug, PartialEq, Eq, Clone, Copy)]
+pub struct Amount {
+    pub in_account_currency: Decimal,
+    pub in_ledger_currency: Decimal,
+}
+
+impl Amount {
+    pub fn zero() -> Amount {
+        Amount {
+            in_account_currency: Decimal::zero(),
+            in_ledger_currency: Decimal::zero(),
+        }
+    }
+
+    pub fn is_zero(&self) -> bool {
+        self.in_account_currency.is_zero() && self.in_ledger_currency.is_zero()
+    }
+}
+
+impl Add<Amount> for Amount {
+    type Output = Amount;
+
+    fn add(self, other: Amount) -> Amount {
+        Amount {
+            in_account_currency: self.in_account_currency + other.in_account_currency,
+            in_ledger_currency: self.in_ledger_currency + other.in_ledger_currency,
+        }
+    }
+}
+
+impl AddAssign<Amount> for Amount {
+    fn add_assign(&mut self, other: Amount) {
+        self.in_account_currency += other.in_account_currency;
+        self.in_ledger_currency += other.in_ledger_currency;
+    }
+}
+
+impl Sum for Amount {
+    fn sum<I: Iterator<Item = Amount>>(iter: I) -> Amount {
+        iter.fold(Amount::zero(), |acc, amount| acc + amount)
+    }
+}
+
+impl Sub<Amount> for Amount {
+    type Output = Amount;
+
+    fn sub(self, other: Amount) -> Amount {
+        Amount {
+            in_account_currency: self.in_account_currency - other.in_account_currency,
+            in_ledger_currency: self.in_ledger_currency - other.in_ledger_currency,
+        }
+    }
+}
+
+impl Neg for Amount {
+    type Output = Amount;
+
+    fn neg(self) -> Amount {
+        Amount {
+            in_account_currency: -self.in_account_currency,
+            in_ledger_currency: -self.in_ledger_currency,
+        }
+    }
+}
+
 #[derive(Debug, Clone)]
 pub struct AccountBalance {
-    pub start_balance: Decimal,
-    pub end_balance: Decimal,
+    pub start_balance: Amount,
+    pub end_balance: Amount,
+    pub account_currency: String,
 }
 
 #[derive(Debug, Clone, Copy)]
@@ -49,7 +122,7 @@ impl Transaction {
         self.postings
             .iter()
             .map(|posting| posting.amount)
-            .sum::<Decimal>()
+            .sum::<Amount>()
             .is_zero()
     }
 }
@@ -57,5 +130,5 @@ impl Transaction {
 #[derive(Debug, Clone)]
 pub struct Posting {
     pub account_name: String,
-    pub amount: Decimal,
+    pub amount: Amount,
 }

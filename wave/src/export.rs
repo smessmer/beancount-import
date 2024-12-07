@@ -7,10 +7,8 @@ use common_macros::{hash_map, hash_set};
 
 use crate::{
     config::Config,
-    ir::{self, AccountBalance, Dates, Transaction},
+    ir::{self, AccountBalance, Dates, Transaction, LEDGER_CURRENCY},
 };
-
-const CURRENCY: &str = "USD";
 
 fn opening_balance_account() -> beancount_core::Account<'static> {
     beancount_core::Account {
@@ -61,13 +59,13 @@ fn print_exported_header(ledger: &ir::Ledger) -> Result<()> {
         }),
         Directive::Option(BcOption {
             name: Cow::Borrowed("operating_currency"),
-            val: Cow::Borrowed(CURRENCY),
+            val: Cow::Borrowed(LEDGER_CURRENCY),
             source: None,
         }),
         Directive::Open(Open {
             date: day_before_start_date.into(),
             account: opening_balance_account(),
-            currencies: vec![Cow::Borrowed(CURRENCY)],
+            currencies: vec![Cow::Borrowed(LEDGER_CURRENCY)],
             booking: None,
             meta: hash_map![],
             source: None,
@@ -130,7 +128,7 @@ fn print_account_and_transactions(
     directives.push(Directive::Open(Open {
         date: day_before_start_date.into(),
         account: account.clone(),
-        currencies: vec![Cow::Borrowed(CURRENCY)],
+        currencies: vec![Cow::Borrowed(LEDGER_CURRENCY)],
         booking: None,
         meta: hash_map![],
         source: None,
@@ -148,8 +146,8 @@ fn print_account_and_transactions(
         date: dates.start_date.into(),
         account: account.clone(),
         amount: Amount {
-            num: balances.start_balance,
-            currency: Cow::Borrowed(CURRENCY),
+            num: balances.start_balance.in_ledger_currency,
+            currency: Cow::Borrowed(LEDGER_CURRENCY),
         },
         tolerance: None,
         meta: hash_map![],
@@ -166,8 +164,8 @@ fn print_account_and_transactions(
         date: day_after_end_date.into(),
         account: account.clone(),
         amount: Amount {
-            num: balances.end_balance,
-            currency: Cow::Borrowed(CURRENCY),
+            num: balances.end_balance.in_ledger_currency,
+            currency: Cow::Borrowed(LEDGER_CURRENCY),
         },
         tolerance: None,
         meta: hash_map![],
@@ -229,8 +227,8 @@ fn posting_to_beancount<'a>(
     Ok(beancount_core::Posting {
         account: config.lookup_beancount_account_name(&posting.account_name)?,
         units: IncompleteAmount {
-            num: Some(posting.amount),
-            currency: Some(Cow::Borrowed(CURRENCY)),
+            num: Some(posting.amount.in_ledger_currency),
+            currency: Some(Cow::Borrowed(LEDGER_CURRENCY)),
         },
         cost: None,
         price: None,
