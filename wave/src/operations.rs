@@ -1,10 +1,11 @@
 use anyhow::Result;
 use chrono::NaiveDate;
+use rust_decimal::prelude::Zero as _;
 use rust_decimal::Decimal;
 use std::collections::{hash_map::Entry, HashMap};
 use std::hash::Hash;
 
-use crate::ir::{Amount, Ledger, Posting, Transaction};
+use crate::ir::{Ledger, Posting, Transaction};
 
 pub fn merge_transactions_with_same_date_description_and_amount(ledger: Ledger) -> Ledger {
     let merged_transactions = group_by(
@@ -87,9 +88,9 @@ pub fn check_transactions_are_balanced_per_date(ledger: &Ledger) -> Result<()> {
     for (date, postings) in &postings_by_date {
         let sum = postings
             .iter()
-            .map(|posting| posting.amount)
-            .sum::<Amount>();
-        if sum != Amount::zero() {
+            .map(|posting| posting.amount.in_ledger_currency)
+            .sum::<Decimal>();
+        if sum != Decimal::zero() {
             return Err(anyhow::anyhow!(
                 "Postings on date {:?} are not balanced: {:?}",
                 date,
