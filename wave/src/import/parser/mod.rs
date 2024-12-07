@@ -1,15 +1,10 @@
 use chrono::NaiveDate;
-use chumsky::Parser as _;
-use nom::{
-    combinator::{all_consuming, cut, eof, opt, value},
-    error::{context, VerboseError},
-    multi::many_till,
-    sequence::terminated,
-    IResult,
-};
+use chumsky::{error::Simple, prelude::end, Parser as _};
 
 mod utils;
-use utils::{chumsky_to_nom, empty_cell, row_end};
+use utils::{empty_cell, row_end};
+
+pub use utils::chumsky_to_nom;
 
 mod account;
 mod header;
@@ -24,42 +19,32 @@ pub struct WaveLedger {
     pub accounts: Vec<account::Account>,
 }
 
-pub fn ledger(input: &str) -> IResult<&str, WaveLedger, VerboseError<&str>> {
-    let (input, header) =
-        context("Failed to parse header", chumsky_to_nom(header::header()))(input)?;
-    let (input, (accounts, _eof)) = context(
-        "Failed to parse ledger accounts",
-        all_consuming(many_till(
-            terminated(
-                cut(account::account(header.column_schema)),
-                opt(row_with_empty_cell),
-            ),
-            eof,
-        )),
-    )(input)?;
-
-    Ok((
-        input,
-        WaveLedger {
-            ledger_name: header.ledger_name.to_string(),
-            start_date: header.start_date,
-            end_date: header.end_date,
-            accounts,
-        },
-    ))
+pub fn ledger() -> impl chumsky::Parser<char, WaveLedger, Error = Simple<char>> {
+    header::header().then_with(|header| {
+        account::account(header.column_schema)
+            .separated_by(row_with_empty_cell())
+            .then_ignore(row_with_empty_cell().or_not())
+            .then_ignore(end())
+            .map(move |accounts| WaveLedger {
+                ledger_name: header.ledger_name.to_string(),
+                start_date: header.start_date,
+                end_date: header.end_date,
+                accounts,
+            })
+    })
 }
 
-fn row_with_empty_cell(input: &str) -> IResult<&str, (), VerboseError<&str>> {
-    context(
-        "Failed to parse row_with_empty_cell",
-        value((), chumsky_to_nom(empty_cell().then_ignore(row_end()))),
-    )(input)
+fn row_with_empty_cell() -> impl chumsky::Parser<char, (), Error = Simple<char>> {
+    empty_cell()
+        .then_ignore(row_end())
+        .labelled("row with empty cell")
 }
 
 #[cfg(test)]
 mod tests {
-    use nom::error::VerboseErrorKind;
+    use chumsky::Error;
     use rust_decimal::{prelude::Zero, Decimal};
+    use utils::test_parser;
 
     use super::*;
     use crate::import::parser::account::{Account, EndingBalance, Posting};
@@ -84,70 +69,69 @@ Starting Balance,,,,,$123.45
 ,2024-04-04,Some: Addition,$15.67,,$137.89
 Totals and Ending Balance,,,$15.67,$1.23,$137.89
 Balance Change,,,$14.44,,"#;
-        assert_eq!(
-            ledger(input),
-            Ok((
-                "",
-                WaveLedger {
-                    ledger_name: "Personal".to_string(),
-                    start_date: NaiveDate::from_ymd_opt(2024, 1, 1).unwrap(),
-                    end_date: NaiveDate::from_ymd_opt(2024, 11, 30).unwrap(),
-                    accounts: vec![
-                        Account {
-                            name: "First Account".to_string(),
-                            starting_balance: Decimal::new(12345, 2),
-                            postings: vec![
-                                Posting {
-                                    date: NaiveDate::from_ymd_opt(2024, 1, 4).unwrap(),
-                                    description: "Some: Addition".to_string(),
-                                    debit: Decimal::new(123, 2),
-                                    credit: Decimal::zero(),
-                                    balance: Decimal::new(12468, 2),
-                                },
-                                Posting {
-                                    date: NaiveDate::from_ymd_opt(2024, 4, 4).unwrap(),
-                                    description: "Some: Withdrawal".to_string(),
-                                    debit: Decimal::zero(),
-                                    credit: Decimal::new(1567, 2),
-                                    balance: Decimal::new(10901, 2),
-                                },
-                            ],
-                            ending_balance: EndingBalance {
-                                total_debit: Decimal::new(123, 2),
-                                total_credit: Decimal::new(1567, 2),
-                                ending_balance: Decimal::new(10901, 2),
+        test_parser(
+            input,
+            ledger(),
+            WaveLedger {
+                ledger_name: "Personal".to_string(),
+                start_date: NaiveDate::from_ymd_opt(2024, 1, 1).unwrap(),
+                end_date: NaiveDate::from_ymd_opt(2024, 11, 30).unwrap(),
+                accounts: vec![
+                    Account {
+                        name: "First Account".to_string(),
+                        starting_balance: Decimal::new(12345, 2),
+                        postings: vec![
+                            Posting {
+                                date: NaiveDate::from_ymd_opt(2024, 1, 4).unwrap(),
+                                description: "Some: Addition".to_string(),
+                                debit: Decimal::new(123, 2),
+                                credit: Decimal::zero(),
+                                balance: Decimal::new(12468, 2),
                             },
-                            balance_change: Decimal::new(-1444, 2),
+                            Posting {
+                                date: NaiveDate::from_ymd_opt(2024, 4, 4).unwrap(),
+                                description: "Some: Withdrawal".to_string(),
+                                debit: Decimal::zero(),
+                                credit: Decimal::new(1567, 2),
+                                balance: Decimal::new(10901, 2),
+                            },
+                        ],
+                        ending_balance: EndingBalance {
+                            total_debit: Decimal::new(123, 2),
+                            total_credit: Decimal::new(1567, 2),
+                            ending_balance: Decimal::new(10901, 2),
                         },
-                        Account {
-                            name: "Second Account".to_string(),
-                            starting_balance: Decimal::new(12345, 2),
-                            postings: vec![
-                                Posting {
-                                    date: NaiveDate::from_ymd_opt(2024, 1, 4).unwrap(),
-                                    description: "Some: Withdrawal".to_string(),
-                                    debit: Decimal::zero(),
-                                    credit: Decimal::new(123, 2),
-                                    balance: Decimal::new(12222, 2),
-                                },
-                                Posting {
-                                    date: NaiveDate::from_ymd_opt(2024, 4, 4).unwrap(),
-                                    description: "Some: Addition".to_string(),
-                                    debit: Decimal::new(1567, 2),
-                                    credit: Decimal::zero(),
-                                    balance: Decimal::new(13789, 2),
-                                },
-                            ],
-                            ending_balance: EndingBalance {
-                                total_debit: Decimal::new(1567, 2),
-                                total_credit: Decimal::new(123, 2),
-                                ending_balance: Decimal::new(13789, 2),
+                        balance_change: Decimal::new(-1444, 2),
+                    },
+                    Account {
+                        name: "Second Account".to_string(),
+                        starting_balance: Decimal::new(12345, 2),
+                        postings: vec![
+                            Posting {
+                                date: NaiveDate::from_ymd_opt(2024, 1, 4).unwrap(),
+                                description: "Some: Withdrawal".to_string(),
+                                debit: Decimal::zero(),
+                                credit: Decimal::new(123, 2),
+                                balance: Decimal::new(12222, 2),
                             },
-                            balance_change: Decimal::new(1444, 2),
-                        }
-                    ],
-                }
-            ))
+                            Posting {
+                                date: NaiveDate::from_ymd_opt(2024, 4, 4).unwrap(),
+                                description: "Some: Addition".to_string(),
+                                debit: Decimal::new(1567, 2),
+                                credit: Decimal::zero(),
+                                balance: Decimal::new(13789, 2),
+                            },
+                        ],
+                        ending_balance: EndingBalance {
+                            total_debit: Decimal::new(1567, 2),
+                            total_credit: Decimal::new(123, 2),
+                            ending_balance: Decimal::new(13789, 2),
+                        },
+                        balance_change: Decimal::new(1444, 2),
+                    },
+                ],
+            },
+            "",
         );
     }
 
@@ -174,34 +158,25 @@ Balance Change,,,$14.44,,
 ""
 bla"#;
         assert_eq!(
-            ledger(input),
-            Err(nom::Err::Failure(nom::error::VerboseError {
-                errors: vec![
-                    ("bla", VerboseErrorKind::Context("chumsky")),
-                    ("bla", VerboseErrorKind::Context("Failed to parse account")),
-                    (",First Account,,,,\nStarting Balance,,,,,$123.45\n,2024-01-04,Some: Addition,$1.23,,$124.68\n,2024-04-04,Some: Withdrawal,,$15.67,$109.01\nTotals and Ending Balance,,,$1.23,$15.67,$109.01\nBalance Change,,,-$14.44,,\n\"\"\n,Second Account,,,,\nStarting Balance,,,,,$123.45\n,2024-01-04,Some: Withdrawal,,$1.23,$122.22\n,2024-04-04,Some: Addition,$15.67,,$137.89\nTotals and Ending Balance,,,$15.67,$1.23,$137.89\nBalance Change,,,$14.44,,\n\"\"\nbla", VerboseErrorKind::Context("Failed to parse ledger accounts"))]
-            }))
+            ledger().parse(input),
+            Err(vec![
+                Simple::expected_input_found(654..655, [None], Some('b')).with_label("csv cell"),
+                Simple::custom(654..657, "Failed to parse cell content").with_label("csv cell")
+            ])
         );
     }
 
     #[test]
     fn test_row_with_empty_cell() {
-        assert_eq!(row_with_empty_cell("\n"), Ok(("", ())));
-        assert_eq!(row_with_empty_cell("\r\n"), Ok(("", ())));
-        assert_eq!(row_with_empty_cell("\"\"\r\nb"), Ok(("b", ())));
+        test_parser("\n", row_with_empty_cell(), (), "");
+        test_parser("\r\n", row_with_empty_cell(), (), "");
+        test_parser("\"\"\r\nb", row_with_empty_cell(), (), "b");
         assert_eq!(
-            row_with_empty_cell("foo"),
-            Err(nom::Err::Error(nom::error::VerboseError {
-                errors: vec![
-                    ("foo", nom::error::VerboseErrorKind::Context("chumsky")),
-                    (
-                        "foo",
-                        nom::error::VerboseErrorKind::Context(
-                            "Failed to parse row_with_empty_cell"
-                        )
-                    )
-                ]
-            }))
+            row_with_empty_cell().parse("foo"),
+            Err(vec![
+                Simple::expected_input_found(0..1, [None], Some('f')).with_label("csv cell"),
+                Simple::custom(0..3, "Failed to parse cell content").with_label("csv cell")
+            ])
         );
     }
 }

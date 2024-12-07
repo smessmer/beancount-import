@@ -6,7 +6,7 @@ use std::io::Read;
 
 mod parser;
 
-use parser::{AccountType, WaveLedger};
+use parser::{chumsky_to_nom, AccountType, WaveLedger};
 
 use crate::ir::{AccountBalance, Dates, Ledger, Posting, Transaction};
 
@@ -34,7 +34,7 @@ fn load_wave_ledger(mut input_stream: impl Read) -> Result<WaveLedger> {
     //     }
     // }
     // todo!();
-    let (rest, parsed) = parser::ledger
+    let (rest, parsed) = chumsky_to_nom(parser::ledger())
         .parse(&content)
         .finish()
         .map_err(|err| VerboseError {

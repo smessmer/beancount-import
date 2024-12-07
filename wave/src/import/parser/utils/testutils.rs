@@ -80,6 +80,9 @@ mod tests {
 
     mod regression {
         //! Regression tests for https://github.com/zesterer/chumsky/issues/707
+        // TODO Since this github issue isn't fixed yet, the tests currently just test that our workaround
+        // (i.e. the alternative implementation of `test_parser`) works as expected.
+        // But they can be used after the issue is fixed to test the actual fix.
         use super::*;
 
         mod empty_parser {
@@ -149,7 +152,7 @@ mod tests {
             }
 
             #[test]
-            // TDOD Add expected panic message
+            // TODO Add expected panic message
             #[should_panic]
             fn expected_rest_but_has_no_rest() {
                 let parser = chumsky::primitive::just::<char, _, Simple<char>>('a').rewind();
@@ -157,11 +160,54 @@ mod tests {
             }
 
             #[test]
-            // TDOD Add expected panic message
+            // TODO Add expected panic message
             #[should_panic]
             fn expected_no_rest_but_has_rest() {
                 let parser = chumsky::primitive::just::<char, _, Simple<char>>('a').rewind();
                 test_parser("abc", parser, 'a', "a");
+            }
+        }
+
+        mod repeated {
+            use super::*;
+
+            // TODO Add once fixed
+            // #[test]
+            // fn repeated_parser_span() {
+            //     // Regression test for https://github.com/zesterer/chumsky/issues/707
+            //     let parser = chumsky::primitive::just::<char, _, Simple<char>>('a')
+            //         .repeated()
+            //         .map_with_span(|_, span| span);
+            //     let span = parser.parse("b");
+            //     assert_eq!(span, Ok(0..0));
+            // }
+
+            #[test]
+            fn success_without_rest() {
+                let parser = chumsky::primitive::just::<char, _, Simple<char>>('a').repeated();
+                test_parser("b", parser, vec![], "b");
+            }
+
+            #[test]
+            fn success_with_rest() {
+                let parser = chumsky::primitive::just::<char, _, Simple<char>>('a').repeated();
+                test_parser("bbc", parser, vec![], "bbc");
+            }
+
+            #[test]
+            // TODO Add expected panic message
+            #[should_panic]
+            fn expected_rest_but_has_no_rest() {
+                let parser = chumsky::primitive::just::<char, _, Simple<char>>('a').repeated();
+                test_parser("", parser, vec![], "bbc");
+            }
+
+            #[test]
+            // TODO Add expected panic message
+            #[should_panic]
+            fn expected_no_rest_but_has_rest() {
+                let parser = chumsky::primitive::just::<char, _, Simple<char>>('a').repeated();
+                test_parser("bbc", parser, vec![], "");
             }
         }
     }
