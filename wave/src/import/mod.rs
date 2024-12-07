@@ -1,12 +1,12 @@
 use anyhow::Result;
 use ariadne::{Color, Fmt as _, Label, Report, ReportKind, Source};
-use nom::{error::VerboseError, Finish as _, Parser as _};
+use chumsky::Parser as _;
 use rust_decimal::{prelude::Zero, Decimal};
 use std::io::Read;
 
 mod parser;
 
-use parser::{chumsky_to_nom, AccountType, WaveLedger};
+use parser::{AccountType, WaveLedger};
 
 use crate::ir::{AccountBalance, Dates, Ledger, Posting, Transaction};
 
@@ -19,33 +19,15 @@ fn load_wave_ledger(mut input_stream: impl Read) -> Result<WaveLedger> {
     let mut content = String::new();
     input_stream.read_to_string(&mut content)?;
     let content = maybe_remove_byte_order_mark(content);
-    // match cell_tag_chumsky("Account Transactions")
-    //     .then(row_end_chumsky())
-    //     .then(cell_tag_chumsky("Personal"))
-    //     .then(row_end_chumsky())
-    //     .then(cell_tag_chumsky("Blub"))
-    //     .parse(content.as_str())
-    // {
-    //     Ok(_) => (),
-    //     Err(errors) => {
-    //         for err in errors {
-    //             print_parser_error(&content, err)
-    //         }
-    //     }
-    // }
-    // todo!();
-    let (rest, parsed) = chumsky_to_nom(parser::ledger())
-        .parse(&content)
-        .finish()
-        .map_err(|err| VerboseError {
-            errors: err
-                .errors
-                .into_iter()
-                .map(|(input, kind)| (input.to_string(), kind))
-                .collect(),
-        })?;
-    assert_eq!("", rest);
-    Ok(parsed)
+    match parser::ledger().parse(content.as_str()) {
+        Ok(parsed) => Ok(parsed),
+        Err(errors) => {
+            for err in errors {
+                print_parser_error(&content, err)
+            }
+            Err(anyhow::anyhow!("Failed to parse ledger"))
+        }
+    }
 }
 
 fn print_parser_error(input: &str, err: chumsky::error::Simple<char>) {

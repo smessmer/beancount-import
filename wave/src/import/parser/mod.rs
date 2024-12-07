@@ -4,8 +4,6 @@ use chumsky::{error::Simple, prelude::end, Parser as _};
 mod utils;
 use utils::{empty_cell, row_end};
 
-pub use utils::chumsky_to_nom;
-
 mod account;
 mod header;
 

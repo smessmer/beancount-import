@@ -7,7 +7,6 @@ version = "0.1.0"
 anyhow = "1.0.93"
 chrono = "0.4.38"
 common_macros = "0.1.1"
-nom = "7.1.3"
 rust_decimal = "1.36.0"
 beancount-core = {git = "https://github.com/smessmer/beancount", version = "0.2.0", features = ["chrono"]}
 beancount-render = {git = "https://github.com/smessmer/beancount", version = "0.1.0"}
