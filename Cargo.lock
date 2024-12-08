@@ -226,6 +226,16 @@ checksum = "72b3254f16251a8381aa12e40e3c4d2f0199f8c6508fbecb9d91f575e0fbb8c6"
 [[package]]
 name = "beancount-core"
 version = "0.2.0"
+source = "git+https://github.com/smessmer/beancount?rev=ace8ac51fa3ae3f6203cba41246a0005f7d04def#ace8ac51fa3ae3f6203cba41246a0005f7d04def"
+dependencies = [
+ "chrono",
+ "rust_decimal",
+ "typed-builder",
+]
+
+[[package]]
+name = "beancount-core"
+version = "0.2.0"
 source = "git+https://github.com/smessmer/beancount#3ce290695c5f96794e0f3677a9b70d0a3cfbf7a3"
 dependencies = [
  "chrono",
@@ -239,8 +249,8 @@ version = "0.1.0"
 dependencies = [
  "anyhow",
  "base64 0.22.1",
- "beancount-core",
- "beancount-render",
+ "beancount-core 0.2.0 (git+https://github.com/smessmer/beancount)",
+ "beancount-render 0.1.0 (git+https://github.com/smessmer/beancount)",
  "chacha20poly1305",
  "chrono",
  "clap",
@@ -274,8 +284,8 @@ version = "0.1.0"
 dependencies = [
  "anyhow",
  "ariadne",
- "beancount-core",
- "beancount-render",
+ "beancount-core 0.2.0 (git+https://github.com/smessmer/beancount?rev=ace8ac51fa3ae3f6203cba41246a0005f7d04def)",
+ "beancount-render 0.1.0 (git+https://github.com/smessmer/beancount?rev=ace8ac51fa3ae3f6203cba41246a0005f7d04def)",
  "chrono",
  "chumsky",
  "clap",
@@ -290,9 +300,18 @@ dependencies = [
 [[package]]
 name = "beancount-render"
 version = "0.1.0"
+source = "git+https://github.com/smessmer/beancount?rev=ace8ac51fa3ae3f6203cba41246a0005f7d04def#ace8ac51fa3ae3f6203cba41246a0005f7d04def"
+dependencies = [
+ "beancount-core 0.2.0 (git+https://github.com/smessmer/beancount?rev=ace8ac51fa3ae3f6203cba41246a0005f7d04def)",
+ "thiserror",
+]
+
+[[package]]
+name = "beancount-render"
+version = "0.1.0"
 source = "git+https://github.com/smessmer/beancount#3ce290695c5f96794e0f3677a9b70d0a3cfbf7a3"
 dependencies = [
- "beancount-core",
+ "beancount-core 0.2.0 (git+https://github.com/smessmer/beancount)",
  "thiserror",
 ]
 

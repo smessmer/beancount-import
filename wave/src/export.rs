@@ -1,7 +1,9 @@
 use std::{borrow::Cow, collections::HashMap, io::stdout};
 
 use anyhow::{anyhow, Result};
-use beancount_core::{Amount, Balance, BcOption, Directive, Flag, IncompleteAmount, Open};
+use beancount_core::{
+    Amount, Balance, BcOption, Directive, Flag, IncompleteAmount, Open, PriceSpec,
+};
 use chrono::Days;
 use common_macros::{hash_map, hash_set};
 
@@ -62,7 +64,7 @@ fn print_exported_header(ledger: &ir::Ledger) -> Result<()> {
             val: Cow::Borrowed(LEDGER_CURRENCY),
             source: None,
         }),
-        Directive::Open(Open {https://beancount.github.io/docs/beancount_query_language.html
+        Directive::Open(Open {
             date: day_before_start_date.into(),
             account: opening_balance_account(),
             currencies: vec![Cow::Borrowed(LEDGER_CURRENCY)],
@@ -236,11 +238,10 @@ fn posting_to_beancount<'a>(
     let price = if account_currency == LEDGER_CURRENCY {
         None
     } else {
-        Some(IncompleteAmount {
-            // TODO Specify total price instead of price per unit, '@@' syntax in beancount does this but our exporter currently does not support it
-            num: Some(posting.amount.in_ledger_currency / posting.amount.in_account_currency),
+        Some(PriceSpec::Total(IncompleteAmount {
+            num: Some(posting.amount.in_ledger_currency.abs()),
             currency: Some(Cow::Borrowed(LEDGER_CURRENCY)),
-        })
+        }))
     };
     Ok(beancount_core::Posting {
         account: config.lookup_beancount_account_name(&posting.account_name)?,

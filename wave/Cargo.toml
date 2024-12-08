@@ -8,8 +8,9 @@ anyhow = "1.0.93"
 chrono = "0.4.38"
 common_macros = "0.1.1"
 rust_decimal = "1.36.0"
-beancount-core = {git = "https://github.com/smessmer/beancount", version = "0.2.0", features = ["chrono"]}
-beancount-render = {git = "https://github.com/smessmer/beancount", version = "0.1.0"}
+# beancount-core and beancount-render add https://github.com/twilco/beancount/pull/51 on top of their released versions
+beancount-core = {git = "https://github.com/smessmer/beancount", rev = "ace8ac51fa3ae3f6203cba41246a0005f7d04def", version = "0.2.0", features = ["chrono"]}
+beancount-render = {git = "https://github.com/smessmer/beancount", rev = "ace8ac51fa3ae3f6203cba41246a0005f7d04def", version = "0.1.0"}
 serde = {version = "1.0.215", features = ["derive"]}
 dialoguer = "0.11.0"
 serde_yaml = "0.9.34"
