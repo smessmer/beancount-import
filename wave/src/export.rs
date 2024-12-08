@@ -7,7 +7,7 @@ use common_macros::{hash_map, hash_set};
 
 use crate::{
     config::Config,
-    ir::{self, AccountBalance, Dates, Transaction, LEDGER_CURRENCY},
+    ir::{self, AccountInfo, Dates, Transaction, LEDGER_CURRENCY},
 };
 
 fn opening_balance_account() -> beancount_core::Account<'static> {
@@ -20,7 +20,7 @@ fn opening_balance_account() -> beancount_core::Account<'static> {
 pub fn print_exported_transactions<'a>(ledger: crate::ir::Ledger, config: &Config) -> Result<()> {
     print_exported_header(&ledger)?;
 
-    let balances = ledger.account_balances.clone();
+    let balances = ledger.accounts.clone();
 
     let (balanced_transactions, unbalanced_transactions): (Vec<_>, Vec<_>) = ledger
         .transactions
@@ -34,7 +34,7 @@ pub fn print_exported_transactions<'a>(ledger: crate::ir::Ledger, config: &Confi
         balances,
     )?;
 
-    print_unbalanced_transactions(unbalanced_transactions, config)?;
+    print_unbalanced_transactions(unbalanced_transactions, config, &ledger.accounts)?;
 
     Ok(())
 }
@@ -62,7 +62,7 @@ fn print_exported_header(ledger: &ir::Ledger) -> Result<()> {
             val: Cow::Borrowed(LEDGER_CURRENCY),
             source: None,
         }),
-        Directive::Open(Open {
+        Directive::Open(Open {https://beancount.github.io/docs/beancount_query_language.html
             date: day_before_start_date.into(),
             account: opening_balance_account(),
             currencies: vec![Cow::Borrowed(LEDGER_CURRENCY)],
@@ -81,13 +81,13 @@ fn print_accounts_and_contained_balanced_transactions(
     balanced_transactions: Vec<Transaction>,
     config: &Config,
     dates: Dates,
-    balances: HashMap<String, AccountBalance>,
+    accounts: HashMap<String, AccountInfo>,
 ) -> Result<()> {
     let mut account_ledgers = group_by_account(balanced_transactions.into_iter(), config)?;
 
     // Don't iterate over account_ledgers because they may not contain all accounts (e.g. they won't contain accounts that have all transactions assigned to other accounts)
     // Instead, iterate over all account names in the ledger. This makes sure we still print account opening directives and balance assertions for accounts that have no transactions.
-    for (account, balances) in balances.into_iter() {
+    for (account, account_info) in accounts.iter() {
         let beancount_account = config.lookup_beancount_account_name(&account)?;
         let transactions = account_ledgers
             .remove(&beancount_account)
@@ -97,9 +97,10 @@ fn print_accounts_and_contained_balanced_transactions(
             &account,
             config,
             beancount_account,
-            balances,
+            account_info,
             dates,
             transactions,
+            &accounts,
         )?;
     }
 
@@ -110,9 +111,10 @@ fn print_account_and_transactions(
     import_account_name: &str,
     config: &Config,
     account: beancount_core::Account,
-    balances: AccountBalance,
+    account_info: &AccountInfo,
     dates: Dates,
     transactions: Vec<Transaction>,
+    accounts: &HashMap<String, AccountInfo>,
 ) -> Result<()> {
     let mut directives = vec![];
     // Open the account a day before the first transaction because the balance assertion must be on the day after the pad directive.
@@ -128,12 +130,12 @@ fn print_account_and_transactions(
     directives.push(Directive::Open(Open {
         date: day_before_start_date.into(),
         account: account.clone(),
-        currencies: vec![Cow::Borrowed(LEDGER_CURRENCY)],
+        currencies: vec![Cow::Borrowed(&account_info.account_currency)],
         booking: None,
         meta: hash_map![],
         source: None,
     }));
-    if !balances.start_balance.is_zero() {
+    if !account_info.start_balance.is_zero() {
         directives.push(Directive::Pad(beancount_core::Pad {
             date: day_before_start_date.into(),
             pad_to_account: account.clone(),
@@ -146,8 +148,8 @@ fn print_account_and_transactions(
         date: dates.start_date.into(),
         account: account.clone(),
         amount: Amount {
-            num: balances.start_balance.in_ledger_currency,
-            currency: Cow::Borrowed(LEDGER_CURRENCY),
+            num: account_info.start_balance.in_account_currency,
+            currency: Cow::Borrowed(&account_info.account_currency),
         },
         tolerance: None,
         meta: hash_map![],
@@ -156,7 +158,7 @@ fn print_account_and_transactions(
     directives.extend(
         transactions
             .into_iter()
-            .map(|transaction| transaction_to_beancount(config, transaction))
+            .map(|transaction| transaction_to_beancount(config, transaction, accounts))
             .collect::<Result<Vec<_>>>()?
             .into_iter(),
     );
@@ -164,8 +166,8 @@ fn print_account_and_transactions(
         date: day_after_end_date.into(),
         account: account.clone(),
         amount: Amount {
-            num: balances.end_balance.in_ledger_currency,
-            currency: Cow::Borrowed(LEDGER_CURRENCY),
+            num: account_info.end_balance.in_account_currency,
+            currency: Cow::Borrowed(&account_info.account_currency),
         },
         tolerance: None,
         meta: hash_map![],
@@ -183,11 +185,12 @@ fn print_account_and_transactions(
 fn print_unbalanced_transactions(
     unbalanced_transactions: Vec<Transaction>,
     config: &Config,
+    accounts: &HashMap<String, AccountInfo>,
 ) -> Result<()> {
     println!("\n\n;; Unbalanced Transactions\n");
     let directives = unbalanced_transactions
         .into_iter()
-        .map(|transaction| transaction_to_beancount(config, transaction))
+        .map(|transaction| transaction_to_beancount(config, transaction, accounts))
         .collect::<Result<Vec<_>>>()?;
     let ledger = beancount_core::Ledger { directives };
     beancount_render::render(&mut stdout(), &ledger)?;
@@ -197,6 +200,7 @@ fn print_unbalanced_transactions(
 fn transaction_to_beancount<'a>(
     config: &'a Config,
     transaction: crate::ir::Transaction,
+    accounts: &'a HashMap<String, AccountInfo>,
 ) -> Result<Directive<'a>> {
     let flag = if transaction.is_balanced() {
         Flag::Okay
@@ -213,7 +217,7 @@ fn transaction_to_beancount<'a>(
         postings: transaction
             .postings
             .into_iter()
-            .map(|posting| posting_to_beancount(config, posting))
+            .map(|posting| posting_to_beancount(config, posting, accounts))
             .collect::<Result<Vec<_>>>()?,
         meta: hash_map![],
         source: None,
@@ -223,15 +227,29 @@ fn transaction_to_beancount<'a>(
 fn posting_to_beancount<'a>(
     config: &'a Config,
     posting: crate::ir::Posting,
+    accounts: &'a HashMap<String, AccountInfo>,
 ) -> Result<beancount_core::Posting<'a>> {
+    let account_currency = &accounts
+        .get(&posting.account_name)
+        .ok_or_else(|| anyhow!("Account not found in accounts: {}", posting.account_name))?
+        .account_currency;
+    let price = if account_currency == LEDGER_CURRENCY {
+        None
+    } else {
+        Some(IncompleteAmount {
+            // TODO Specify total price instead of price per unit, '@@' syntax in beancount does this but our exporter currently does not support it
+            num: Some(posting.amount.in_ledger_currency / posting.amount.in_account_currency),
+            currency: Some(Cow::Borrowed(LEDGER_CURRENCY)),
+        })
+    };
     Ok(beancount_core::Posting {
         account: config.lookup_beancount_account_name(&posting.account_name)?,
         units: IncompleteAmount {
-            num: Some(posting.amount.in_ledger_currency),
-            currency: Some(Cow::Borrowed(LEDGER_CURRENCY)),
+            num: Some(posting.amount.in_account_currency),
+            currency: Some(Cow::Borrowed(account_currency)),
         },
         cost: None,
-        price: None,
+        price,
         flag: None,
         meta: hash_map![],
     })

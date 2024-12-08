@@ -14,7 +14,7 @@ pub const LEDGER_CURRENCY_SYMBOL: &str = "$";
 pub struct Ledger {
     pub ledger_name: String,
     pub dates: Dates,
-    pub account_balances: HashMap<String, AccountBalance>,
+    pub accounts: HashMap<String, AccountInfo>,
     pub transactions: Vec<Transaction>,
 }
 
@@ -98,7 +98,7 @@ impl Neg for Amount {
 }
 
 #[derive(Debug, Clone)]
-pub struct AccountBalance {
+pub struct AccountInfo {
     pub start_balance: Amount,
     pub end_balance: Amount,
     pub account_currency: String,

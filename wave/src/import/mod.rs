@@ -7,7 +7,7 @@ mod parser;
 
 use parser::{AccountType, WaveLedger};
 
-use crate::ir::{AccountBalance, Amount, Dates, Ledger, Posting, Transaction};
+use crate::ir::{AccountInfo, Amount, Dates, Ledger, Posting, Transaction};
 
 pub fn load(input_stream: impl Read) -> Result<Ledger> {
     let wave_ledger = load_wave_ledger(input_stream)?;
@@ -105,26 +105,26 @@ fn to_ir(ledger: WaveLedger) -> Result<Ledger> {
         start_date: ledger.start_date,
         end_date: ledger.end_date,
     };
-    let account_balances = ledger
+    let accounts = ledger
         .accounts
         .iter()
         .map(|account| {
             Ok((
                 account.name.clone(),
                 match account.account_type() {
-                    Some(AccountType::Debit) => AccountBalance {
+                    Some(AccountType::Debit) => AccountInfo {
                         start_balance: account.starting_balance,
                         end_balance: account.ending_balance.ending_balance,
                         account_currency: account.account_currency.clone(),
                     },
-                    Some(AccountType::Credit) => AccountBalance {
+                    Some(AccountType::Credit) => AccountInfo {
                         start_balance: -account.starting_balance,
                         end_balance: -account.ending_balance.ending_balance,
                         account_currency: account.account_currency.clone(),
                     },
                     None => {
                         if account.starting_balance.is_zero() && account.ending_balance.ending_balance.is_zero() {
-                            AccountBalance {
+                            AccountInfo {
                                 start_balance: Amount::zero(),
                                 end_balance: Amount::zero(),
                                 account_currency: account.account_currency.clone(),
@@ -161,6 +161,6 @@ fn to_ir(ledger: WaveLedger) -> Result<Ledger> {
         ledger_name,
         transactions,
         dates,
-        account_balances,
+        accounts,
     })
 }
