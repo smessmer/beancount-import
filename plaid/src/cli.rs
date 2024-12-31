@@ -13,13 +13,13 @@ use std::time::Duration;
 
 use crate::args::{Args, Command};
 use crate::db::{
-    Account, AccountId, AccountType, AddOrVerifyResult, Amount, BeancountAccountInfo,
-    PlaidAccountInfo, Transaction,
+    Account, AccountId, AccountType, AddOrVerifyResult, Amount, BeancountAccountInfo, DatabaseFile,
+    DatabaseV1, PlaidAccountInfo, Transaction,
 };
 use crate::export::print_exported_transactions;
 use crate::terminal::{self, prompt_select, BulletPointPrinter, LineWriter};
 
-use super::db::{self, BankConnection, Cipher, DatabaseV1, DbPlaidAuth, XChaCha20Poly1305Cipher};
+use super::db::{BankConnection, Cipher, DbPlaidAuth, XChaCha20Poly1305Cipher};
 use super::plaid_api;
 
 const ENCRYPTION_KEY_ENCODER: base64::engine::general_purpose::GeneralPurpose =
@@ -44,9 +44,7 @@ pub async fn main(args: Args) -> Result<()> {
 }
 
 pub struct Cli {
-    db: DatabaseV1,
-    db_path: PathBuf,
-    db_cipher: XChaCha20Poly1305Cipher,
+    db: DatabaseFile,
     plaid_api: plaid_api::Plaid,
 }
 
@@ -57,35 +55,32 @@ impl Cli {
         }
         let client_id = terminal::prompt("Plaid Client ID").unwrap();
         let secret = terminal::prompt("Plaid Secret").unwrap();
-        let db = DatabaseV1::new(DbPlaidAuth::new(client_id, secret));
-
         let db_cipher = load_or_gen_new_cipher()?;
-        Ok(Self::_new(db, db_path, db_cipher))
+        let db = DatabaseFile::new(
+            DatabaseV1::new(DbPlaidAuth::new(client_id, secret)),
+            db_path,
+            db_cipher,
+        );
+
+        Ok(Self::_new(db))
     }
 
     pub async fn new_load_db(db_path: PathBuf) -> Result<Self> {
         let db_cipher = load_cipher_from_environment()?;
-        let db = db::load(&db_path, &db_cipher)
+        let db = DatabaseFile::load(db_path, db_cipher)
             .await
             .with_context(||format!("Failed to load database. Is the {BEANCOUNT_PLAID_KEY_ENV_VAR} environment variable set correctly?"))?
             .ok_or_else(|| anyhow!("Database file not found"))?;
-        Ok(Self::_new(db, db_path, db_cipher))
+        Ok(Self::_new(db))
     }
 
-    fn _new(db: DatabaseV1, db_path: PathBuf, db_cipher: XChaCha20Poly1305Cipher) -> Self {
-        let plaid_api = plaid_api::Plaid::new(db.plaid_auth.to_api_auth());
-        Self {
-            db,
-            db_path,
-            db_cipher,
-            plaid_api,
-        }
+    fn _new(db: DatabaseFile) -> Self {
+        let plaid_api = plaid_api::Plaid::new(db.database().plaid_auth.to_api_auth());
+        Self { db, plaid_api }
     }
 
     pub async fn save_db(self) -> Result<()> {
-        db::save(self.db, &self.db_path, &self.db_cipher)
-            .await
-            .context("Failed to save database")?;
+        self.db.save().await.context("Failed to save database")?;
         Ok(())
     }
 
@@ -117,17 +112,17 @@ impl Cli {
         println!();
         println!("{}", style_header("Adding connection:"));
         print_connection(&BulletPointPrinter::new_stdout(), &connection);
-        self.db.bank_connections.push(connection);
+        self.db.database_mut().bank_connections.push(connection);
         Ok(())
     }
 
     pub async fn main_list_connections(&self) -> Result<()> {
         println!("{}", style_header("Connections:"));
-        if self.db.bank_connections.is_empty() {
+        if self.db.database().bank_connections.is_empty() {
             println!("(none)");
         } else {
             let printer = BulletPointPrinter::new_stdout();
-            for connection in &self.db.bank_connections {
+            for connection in &self.db.database().bank_connections {
                 print_connection(&printer, connection);
             }
         }
@@ -140,6 +135,7 @@ impl Cli {
         let printer = BulletPointPrinter::new_multiprogress(&progress);
         let mut sync_results: FuturesUnordered<_> = self
             .db
+            .database_mut()
             .bank_connections
             .iter_mut()
             .map(|connection| async {
@@ -260,7 +256,7 @@ impl Cli {
     pub async fn main_list_transactions(&mut self) -> Result<()> {
         println!("{}", style_header("Transactions:"));
         let printer = BulletPointPrinter::new_stdout();
-        for connection in &self.db.bank_connections {
+        for connection in &self.db.database().bank_connections {
             printer.print_item(style_connection(connection));
             let printer = printer.indent();
             for account in connection.accounts() {
@@ -285,7 +281,7 @@ impl Cli {
     }
 
     pub async fn main_export_all_transactions(&mut self) -> Result<()> {
-        let all_transactions = self.db.bank_connections.iter().flat_map(|c| {
+        let all_transactions = self.db.database().bank_connections.iter().flat_map(|c| {
             c.accounts().flat_map(|account| {
                 account.1.account.iter().flat_map(|account| {
                     account.transactions.iter_all_sorted_by_date().map(
@@ -301,22 +297,27 @@ impl Cli {
     }
 
     pub async fn main_export_new_transactions(&mut self) -> Result<()> {
-        let new_transactions = self.db.bank_connections.iter_mut().flat_map(|c| {
-            c.accounts_mut().flat_map(|account| {
-                account.1.account.iter_mut().flat_map(|account| {
-                    account.transactions.iter_new_sorted_by_date_mut().map(
-                        |(transaction_id, transaction)| {
-                            transaction.mark_as_exported();
-                            (
-                                &account.beancount_account_info,
-                                transaction_id,
-                                &*transaction,
-                            )
-                        },
-                    )
+        let new_transactions = self
+            .db
+            .database_mut()
+            .bank_connections
+            .iter_mut()
+            .flat_map(|c| {
+                c.accounts_mut().flat_map(|account| {
+                    account.1.account.iter_mut().flat_map(|account| {
+                        account.transactions.iter_new_sorted_by_date_mut().map(
+                            |(transaction_id, transaction)| {
+                                transaction.mark_as_exported();
+                                (
+                                    &account.beancount_account_info,
+                                    transaction_id,
+                                    &*transaction,
+                                )
+                            },
+                        )
+                    })
                 })
-            })
-        });
+            });
         print_exported_transactions(new_transactions)?;
         Ok(())
     }

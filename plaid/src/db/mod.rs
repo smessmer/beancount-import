@@ -20,7 +20,7 @@ pub use account::{Account, AccountId, AccountType, BeancountAccountInfo, PlaidAc
 pub use bank_connection::BankConnection;
 pub use crypto::{Cipher, XChaCha20Poly1305Cipher};
 pub use database::DatabaseV1;
-pub use file::{load, save};
+pub use file::DatabaseFile;
 pub use plaid_auth::DbPlaidAuth;
 pub use transactions::{
     AddOrVerifyResult, Amount, Transaction, TransactionCategory, TransactionId, TransactionInfo,

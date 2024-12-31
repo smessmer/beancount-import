@@ -1,64 +1,113 @@
 use anyhow::{anyhow, ensure, Result};
 use crc::{Crc, CRC_32_BZIP2};
-use std::path::Path;
+use std::path::PathBuf;
 
-use super::{crypto::Cipher, database::DatabaseV1, Database};
+use super::{crypto::Cipher, database::DatabaseV1, Database, XChaCha20Poly1305Cipher};
+
+pub struct DatabaseFile {
+    database: DatabaseV1,
+    db_path: PathBuf,
+    db_cipher: XChaCha20Poly1305Cipher,
+}
+
+impl DatabaseFile {
+    pub fn new(database: DatabaseV1, db_path: PathBuf, db_cipher: XChaCha20Poly1305Cipher) -> Self {
+        Self {
+            database,
+            db_path,
+            db_cipher,
+        }
+    }
+
+    pub fn database(&self) -> &DatabaseV1 {
+        &self.database
+    }
+
+    pub fn database_mut(&mut self) -> &mut DatabaseV1 {
+        &mut self.database
+    }
+
+    /// Returns Ok(None) if the db file doesn't exist yet
+    pub async fn load(
+        db_path: PathBuf,
+        db_cipher: XChaCha20Poly1305Cipher,
+    ) -> Result<Option<Self>> {
+        log::info!("Loading database...");
+        if !tokio::fs::try_exists(&db_path).await? {
+            return Ok(None);
+        }
+
+        let content_ciphertext = tokio::fs::read(&db_path).await?;
+        let content_plaintext = db_cipher.decrypt(&content_ciphertext)?;
+        let content_decompressed = zstd::bulk::decompress(
+            &content_plaintext,
+            content_plaintext.len().max(1024 * 1024 * 1024),
+        )?;
+        let crc = crc();
+        let (parsed, remaining): (Database, &[u8]) =
+            postcard::take_from_bytes_crc32(&content_decompressed, crc.digest())?;
+        let Database::V1(database) = parsed;
+        ensure!(0 == remaining.len(), "File had extra bytes");
+
+        log::info!("Loading database...done");
+
+        Ok(Some(Self {
+            database,
+            db_path,
+            db_cipher,
+        }))
+    }
+
+    pub async fn save(self) -> Result<()> {
+        log::info!("Saving database...");
+
+        let crc = crc();
+        let content_plaintext =
+            postcard::to_stdvec_crc32(&Database::V1(self.database), crc.digest())?;
+        let content_compressed = zstd::bulk::compress(
+            &content_plaintext,
+            zstd::compression_level_range().last().unwrap(),
+        )?;
+        let content_ciphertext = self.db_cipher.encrypt(&content_compressed)?;
+
+        // First write to temporary file so we don't lose data if writing fails halfway
+        let filename = self
+            .db_path
+            .file_name()
+            .ok_or_else(|| anyhow!("Path has no filename"))?
+            .to_str()
+            .ok_or_else(|| anyhow!("Filename isn't valid utf-8"))?;
+        let tmppath = self.db_path.with_file_name(format!("{}.temp:", filename));
+        tokio::fs::write(&tmppath, content_ciphertext).await?;
+
+        // Ok, writing succeeded, let's now replace the real file with the tmpfile
+        tokio::fs::rename(&tmppath, self.db_path).await?;
+
+        log::info!("Saving database...done");
+
+        Ok(())
+    }
+}
 
 fn crc() -> Crc<u32> {
     // TODO Which crc algorithm should we use?
     Crc::<u32>::new(&CRC_32_BZIP2)
 }
 
-/// Returns Ok(None) if the db file doesn't exist yet
-pub async fn load(path: &Path, cipher: &impl Cipher) -> Result<Option<DatabaseV1>> {
-    log::info!("Loading database...");
-    if !tokio::fs::try_exists(path).await? {
-        return Ok(None);
+#[cfg(test)]
+impl PartialEq for DatabaseFile {
+    fn eq(&self, other: &Self) -> bool {
+        self.database == other.database && self.db_path == other.db_path
     }
-
-    let content_ciphertext = tokio::fs::read(path).await?;
-    let content_plaintext = cipher.decrypt(&content_ciphertext)?;
-    let content_decompressed = zstd::bulk::decompress(
-        &content_plaintext,
-        content_plaintext.len().max(1024 * 1024 * 1024),
-    )?;
-    let crc = crc();
-    let (parsed, remaining): (Database, &[u8]) =
-        postcard::take_from_bytes_crc32(&content_decompressed, crc.digest())?;
-    let Database::V1(database) = parsed;
-    ensure!(0 == remaining.len(), "File had extra bytes");
-
-    log::info!("Loading database...done");
-
-    Ok(Some(database))
 }
-
-pub async fn save(db: DatabaseV1, path: &Path, cipher: &impl Cipher) -> Result<()> {
-    log::info!("Saving database...");
-
-    let crc = crc();
-    let content_plaintext = postcard::to_stdvec_crc32(&Database::V1(db), crc.digest())?;
-    let content_compressed = zstd::bulk::compress(
-        &content_plaintext,
-        zstd::compression_level_range().last().unwrap(),
-    )?;
-    let content_ciphertext = cipher.encrypt(&content_compressed)?;
-
-    // First write to temporary file so we don't lose data if writing fails halfway
-    let filename = path
-        .file_name()
-        .ok_or_else(|| anyhow!("Path has no filename"))?
-        .to_str()
-        .ok_or_else(|| anyhow!("Filename isn't valid utf-8"))?;
-    let tmppath = path.with_file_name(format!("{}.temp:", filename));
-    tokio::fs::write(&tmppath, content_ciphertext).await?;
-
-    // Ok, writing succeeded, let's now replace the real file with the tmpfile
-    tokio::fs::rename(&tmppath, path).await?;
-
-    log::info!("Saving database...done");
-
-    Ok(())
+#[cfg(test)]
+impl std::fmt::Debug for DatabaseFile {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("DatabaseFile")
+            .field("database", &self.database)
+            .field("db_path", &self.db_path)
+            .finish()
+    }
 }
 
 #[cfg(test)]
@@ -79,7 +128,7 @@ mod tests {
 
     const KEY_SIZE: usize = 32;
 
-    fn cipher(seed: u64) -> impl Cipher {
+    fn cipher(seed: u64) -> XChaCha20Poly1305Cipher {
         let mut rng = StdRng::seed_from_u64(seed);
         let mut key_bytes = [0; KEY_SIZE];
         rng.fill_bytes(&mut key_bytes);
@@ -148,7 +197,7 @@ mod tests {
         let tempdir = tempfile::tempdir().unwrap();
         let tempfile = tempdir.path().join("database");
 
-        let loaded = load(&tempfile, &cipher(1)).await.unwrap();
+        let loaded = DatabaseFile::load(tempfile, cipher(1)).await.unwrap();
         assert_eq!(None, loaded);
     }
 
@@ -157,11 +206,11 @@ mod tests {
         let tempdir = tempfile::tempdir().unwrap();
         let tempfile = tempdir.path().join("database");
 
-        let db = some_db_1();
+        let db = DatabaseFile::new(some_db_1(), tempfile.clone(), cipher(1));
 
-        save(db.clone(), &tempfile, &cipher(1)).await.unwrap();
-        let loaded = load(&tempfile, &cipher(1)).await.unwrap();
-        assert_eq!(db, loaded.unwrap());
+        db.save().await.unwrap();
+        let loaded = DatabaseFile::load(tempfile, cipher(1)).await.unwrap();
+        assert_eq!(some_db_1(), *loaded.unwrap().database());
     }
 
     #[tokio::test]
@@ -169,14 +218,17 @@ mod tests {
         let tempdir = tempfile::tempdir().unwrap();
         let tempfile = tempdir.path().join("database");
 
-        let db1 = some_db_1();
-        let db2 = some_db_2();
+        let db1 = DatabaseFile::new(some_db_1(), tempfile.clone(), cipher(1));
+        let db2 = DatabaseFile::new(some_db_2(), tempfile.clone(), cipher(1));
 
-        save(db1.clone(), &tempfile, &cipher(1)).await.unwrap();
-        save(db2.clone(), &tempfile, &cipher(1)).await.unwrap();
-        let loaded = load(&tempfile, &cipher(1)).await.unwrap().unwrap();
-        assert_ne!(db1, loaded);
-        assert_eq!(db2, loaded);
+        db1.save().await.unwrap();
+        db2.save().await.unwrap();
+        let loaded = DatabaseFile::load(tempfile, cipher(1))
+            .await
+            .unwrap()
+            .unwrap();
+        assert_ne!(some_db_1(), *loaded.database());
+        assert_eq!(some_db_2(), *loaded.database());
     }
 
     #[tokio::test]
@@ -184,10 +236,13 @@ mod tests {
         let tempdir = tempfile::tempdir().unwrap();
         let tempfile = tempdir.path().join("database");
 
-        let db = some_db_1();
+        let db = DatabaseFile::new(some_db_1(), tempfile.clone(), cipher(2));
 
-        save(db.clone(), &tempfile, &cipher(2)).await.unwrap();
-        let loaded = load(&tempfile, &cipher(1)).await.unwrap_err().to_string();
+        db.save().await.unwrap();
+        let loaded = DatabaseFile::load(tempfile, cipher(1))
+            .await
+            .unwrap_err()
+            .to_string();
         assert_eq!("aead::Error", loaded);
     }
 }
