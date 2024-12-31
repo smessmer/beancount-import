@@ -27,13 +27,13 @@ fn transaction_to_beancount<'a>(
     transaction: &'a TransactionInfo,
 ) -> Directive<'a> {
     let mut meta = hash_map![
-        Cow::Borrowed("plaid_transaction_id") => MetaValue::Text(Cow::Borrowed(&transaction_id.0)),
+        Cow::Borrowed("plaid_transaction_id") => MetaValue::Text(Cow::Owned(format!("\"{}\"", transaction_id.0))),
     ];
     if let Some(category) = &transaction.category {
         meta.insert(
             Cow::Borrowed("plaid_category"),
             MetaValue::Text(Cow::Owned(format!(
-                "{}.{}",
+                "\"{}.{}\"",
                 category.primary, category.detailed,
             ))),
         );
@@ -55,20 +55,20 @@ fn transaction_to_beancount<'a>(
         if location != "{}" {
             meta.insert(
                 Cow::Borrowed("plaid_location"),
-                MetaValue::Text(Cow::Owned(location.clone())),
+                MetaValue::Text(Cow::Owned(format!("\"{}\"", location))),
             );
         }
     }
     if let Some(website) = &transaction.associated_website {
         meta.insert(
             Cow::Borrowed("plaid_associated_website"),
-            MetaValue::Text(Cow::Borrowed(website)),
+            MetaValue::Text(Cow::Owned(format!("\"{}\"", website))),
         );
     }
     if let Some(check_number) = &transaction.check_number {
         meta.insert(
             Cow::Borrowed("plaid_check_number"),
-            MetaValue::Text(Cow::Borrowed(check_number)),
+            MetaValue::Text(Cow::Owned(format!("\"{}\"", check_number))),
         );
     }
     Directive::Transaction(beancount_core::Transaction {
