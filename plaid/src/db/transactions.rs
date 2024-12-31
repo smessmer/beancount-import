@@ -51,6 +51,12 @@ impl Transactions {
         sorted_by_date(self.transactions.iter())
     }
 
+    pub fn iter_all_sorted_by_date_mut(
+        &mut self,
+    ) -> impl Iterator<Item = (&TransactionId, &mut Transaction)> {
+        sorted_by_date_mut(self.transactions.iter_mut())
+    }
+
     pub fn iter_new_sorted_by_date_mut(
         &mut self,
     ) -> impl Iterator<Item = (&TransactionId, &mut Transaction)> {
@@ -142,7 +148,12 @@ pub struct TransactionInfo {
     pub posted_date: NaiveDate,
     pub authorized_date: Option<NaiveDate>,
     pub category: Option<TransactionCategory>,
+
+    /// Positive amounts mean money into asset accounts or payments for credit card purchases
+    /// Negative amounts mean money out of asset accounts or credit card purchases
+    /// This aligns with beancount but is the opposite of the Plaid API, which uses positive amounts for money out.
     pub amount: Amount,
+
     pub merchant_name: Option<String>,
     pub description_or_merchant_name: Option<String>,
     pub original_description: Option<String>,

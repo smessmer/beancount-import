@@ -14,7 +14,7 @@ use std::time::Duration;
 use crate::args::{Args, Command};
 use crate::db::{
     Account, AccountId, AccountType, AddOrVerifyResult, Amount, BeancountAccountInfo, DatabaseFile,
-    DatabaseV1, PlaidAccountInfo, Transaction,
+    DatabaseV2, PlaidAccountInfo, Transaction,
 };
 use crate::export::print_exported_transactions;
 use crate::terminal::{self, prompt_select, BulletPointPrinter, LineWriter};
@@ -57,7 +57,7 @@ impl Cli {
         let secret = terminal::prompt("Plaid Secret").unwrap();
         let db_cipher = load_or_gen_new_cipher()?;
         let db = DatabaseFile::new(
-            DatabaseV1::new(DbPlaidAuth::new(client_id, secret)),
+            DatabaseV2::new(DbPlaidAuth::new(client_id, secret)),
             db_path,
             db_cipher,
         );

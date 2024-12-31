@@ -2,17 +2,19 @@ use anyhow::{anyhow, ensure, Result};
 use crc::{Crc, CRC_32_BZIP2};
 use std::path::PathBuf;
 
-use super::{crypto::Cipher, database::DatabaseV1, Database, XChaCha20Poly1305Cipher};
+use crate::db::versioned::VersionedDatabase;
+
+use super::{crypto::Cipher, database::DatabaseV2, XChaCha20Poly1305Cipher};
 
 pub struct DatabaseFile {
-    database: DatabaseV1,
+    database: DatabaseV2,
     db_path: PathBuf,
     db_cipher: XChaCha20Poly1305Cipher,
     modified: bool,
 }
 
 impl DatabaseFile {
-    pub fn new(database: DatabaseV1, db_path: PathBuf, db_cipher: XChaCha20Poly1305Cipher) -> Self {
+    pub fn new(database: DatabaseV2, db_path: PathBuf, db_cipher: XChaCha20Poly1305Cipher) -> Self {
         Self {
             database,
             db_path,
@@ -21,11 +23,11 @@ impl DatabaseFile {
         }
     }
 
-    pub fn database(&self) -> &DatabaseV1 {
+    pub fn database(&self) -> &DatabaseV2 {
         &self.database
     }
 
-    pub fn database_mut(&mut self) -> &mut DatabaseV1 {
+    pub fn database_mut(&mut self) -> &mut DatabaseV2 {
         self.modified = true;
         &mut self.database
     }
@@ -47,9 +49,12 @@ impl DatabaseFile {
             content_plaintext.len().max(1024 * 1024 * 1024),
         )?;
         let crc = crc();
-        let (parsed, remaining): (Database, &[u8]) =
+        let (parsed, remaining): (VersionedDatabase, &[u8]) =
             postcard::take_from_bytes_crc32(&content_decompressed, crc.digest())?;
-        let Database::V1(database) = parsed;
+        let database = match parsed {
+            VersionedDatabase::V1(database) => DatabaseV2::migrate(database),
+            VersionedDatabase::V2(database) => database,
+        };
         ensure!(0 == remaining.len(), "File had extra bytes");
 
         log::info!("Loading database...done");
@@ -75,7 +80,7 @@ impl DatabaseFile {
 
         let crc = crc();
         let content_plaintext =
-            postcard::to_stdvec_crc32(&Database::V1(self.database), crc.digest())?;
+            postcard::to_stdvec_crc32(&VersionedDatabase::V2(self.database), crc.digest())?;
         let content_compressed = zstd::bulk::compress(
             &content_plaintext,
             zstd::compression_level_range().last().unwrap(),
@@ -131,7 +136,7 @@ mod tests {
         account::{Account, AccountType, BeancountAccountInfo, PlaidAccountInfo},
         bank_connection::BankConnection,
         crypto::{self, XChaCha20Poly1305Cipher},
-        database::DatabaseV1,
+        database::DatabaseV2,
         plaid_auth::DbPlaidAuth,
         AccessToken, AccountId,
     };
@@ -152,8 +157,8 @@ mod tests {
         )
     }
 
-    fn some_db_1() -> DatabaseV1 {
-        DatabaseV1 {
+    fn some_db_1() -> DatabaseV2 {
+        DatabaseV2 {
             plaid_auth: DbPlaidAuth::new("client-id".to_string(), "secret".to_string()),
             bank_connections: vec![BankConnection::new(
                 "connection-name-1".to_string(),
@@ -184,8 +189,8 @@ mod tests {
         }
     }
 
-    fn some_db_2() -> DatabaseV1 {
-        DatabaseV1 {
+    fn some_db_2() -> DatabaseV2 {
+        DatabaseV2 {
             plaid_auth: DbPlaidAuth::new("client-id".to_string(), "secret".to_string()),
             bank_connections: vec![BankConnection::new(
                 "connection-name-1".to_string(),

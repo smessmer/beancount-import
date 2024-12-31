@@ -72,7 +72,7 @@ async fn sync_transactions_page(
                 None
             } else {
                 let amount = match Decimal::from_f64(transaction.transaction_base.amount) {
-                    Some(amount) => amount,
+                    Some(amount) => -amount,
                     None => {
                         return Some(Err(anyhow!(
                             "Failed to parse amount {}",
