@@ -52,8 +52,14 @@ impl DatabaseFile {
         let (parsed, remaining): (VersionedDatabase, &[u8]) =
             postcard::take_from_bytes_crc32(&content_decompressed, crc.digest())?;
         let database = match parsed {
-            VersionedDatabase::V1(database) => DatabaseV2::migrate(database),
-            VersionedDatabase::V2(database) => database,
+            VersionedDatabase::V1(database) => {
+                println!("Loaded v1 database, migrating to v2.");
+                DatabaseV2::migrate(database)
+            }
+            VersionedDatabase::V2(database) => {
+                println!("Loaded v2 database");
+                database
+            }
         };
         ensure!(0 == remaining.len(), "File had extra bytes");
 
