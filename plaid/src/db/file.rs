@@ -8,6 +8,7 @@ pub struct DatabaseFile {
     database: DatabaseV1,
     db_path: PathBuf,
     db_cipher: XChaCha20Poly1305Cipher,
+    modified: bool,
 }
 
 impl DatabaseFile {
@@ -16,6 +17,7 @@ impl DatabaseFile {
             database,
             db_path,
             db_cipher,
+            modified: false,
         }
     }
 
@@ -24,6 +26,7 @@ impl DatabaseFile {
     }
 
     pub fn database_mut(&mut self) -> &mut DatabaseV1 {
+        self.modified = true;
         &mut self.database
     }
 
@@ -55,10 +58,19 @@ impl DatabaseFile {
             database,
             db_path,
             db_cipher,
+            modified: false,
         }))
     }
 
-    pub async fn save(self) -> Result<()> {
+    pub async fn save_if_modified(self) -> Result<()> {
+        if self.modified {
+            self.save().await
+        } else {
+            Ok(())
+        }
+    }
+
+    async fn save(self) -> Result<()> {
         log::info!("Saving database...");
 
         let crc = crc();

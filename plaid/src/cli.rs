@@ -80,7 +80,10 @@ impl Cli {
     }
 
     pub async fn save_db(self) -> Result<()> {
-        self.db.save().await.context("Failed to save database")?;
+        self.db
+            .save_if_modified()
+            .await
+            .context("Failed to save database")?;
         Ok(())
     }
 
