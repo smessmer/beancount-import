@@ -17,7 +17,7 @@ use crate::db::{
     PlaidAccountInfo, Transaction,
 };
 use crate::export::print_exported_transactions;
-use crate::terminal::{self, BulletPointPrinter, LineWriter};
+use crate::terminal::{self, prompt_select, BulletPointPrinter, LineWriter};
 
 use super::db::{self, BankConnection, Cipher, DatabaseV1, DbPlaidAuth, XChaCha20Poly1305Cipher};
 use super::plaid_api;
@@ -59,7 +59,7 @@ impl Cli {
         let secret = terminal::prompt("Plaid Secret").unwrap();
         let db = DatabaseV1::new(DbPlaidAuth::new(client_id, secret));
 
-        let db_cipher = gen_new_cipher();
+        let db_cipher = load_or_gen_new_cipher()?;
         Ok(Self::_new(db, db_path, db_cipher))
     }
 
@@ -323,6 +323,23 @@ impl Cli {
 }
 
 const BEANCOUNT_PLAID_KEY_ENV_VAR: &str = "BEANCOUNT_PLAID_KEY";
+
+fn load_or_gen_new_cipher() -> Result<XChaCha20Poly1305Cipher> {
+    match load_cipher_from_environment() {
+        Ok(cipher) => {
+            match prompt_select(
+                "Found an encryption key in the BEANCOUNT_PLAID_KEY environment variable. Use it?",
+                &["Use the environment variable", "Generate a new key"],
+                0,
+            )? {
+                0 => Ok(cipher),
+                1 => Ok(gen_new_cipher()),
+                _ => unreachable!(),
+            }
+        }
+        Err(_) => Ok(gen_new_cipher()),
+    }
+}
 
 fn gen_new_cipher() -> XChaCha20Poly1305Cipher {
     let new_key = XChaCha20Poly1305Cipher::new_key();
