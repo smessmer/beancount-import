@@ -244,8 +244,11 @@ impl Cli {
                     AddOrVerifyResult::ExistsAndMatches => {
                         sync_result.increment_num_verified(&transaction.account_id);
                     }
-                    AddOrVerifyResult::ExistsAndDoesntMatch => {
-                        bail!("Transaction {transaction_id:?} already exists but doesn't match",);
+                    AddOrVerifyResult::ExistsAndDoesntMatch {
+                        existing_value,
+                        new_value,
+                    } => {
+                        bail!("Transaction {transaction_id:?} already exists but doesn't match\nExisting: {existing_value:?}\nNew: {new_value:?}",);
                     }
                 }
             } else {

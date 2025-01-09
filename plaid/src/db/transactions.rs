@@ -11,7 +11,10 @@ use std::{
 pub enum AddOrVerifyResult {
     Added,
     ExistsAndMatches,
-    ExistsAndDoesntMatch,
+    ExistsAndDoesntMatch {
+        existing_value: Transaction,
+        new_value: Transaction,
+    },
 }
 
 #[derive(Serialize, Deserialize, Debug, Clone)]
@@ -37,7 +40,10 @@ impl Transactions {
                 if entry.get() == &transaction {
                     AddOrVerifyResult::ExistsAndMatches
                 } else {
-                    AddOrVerifyResult::ExistsAndDoesntMatch
+                    AddOrVerifyResult::ExistsAndDoesntMatch {
+                        existing_value: entry.get().clone(),
+                        new_value: transaction,
+                    }
                 }
             }
             Entry::Vacant(entry) => {
