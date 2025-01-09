@@ -37,7 +37,7 @@ impl Transactions {
     ) -> AddOrVerifyResult {
         match self.transactions.entry(id.clone()) {
             Entry::Occupied(entry) => {
-                if entry.get() == &transaction {
+                if entry.get().transaction == transaction.transaction {
                     AddOrVerifyResult::ExistsAndMatches
                 } else {
                     AddOrVerifyResult::ExistsAndDoesntMatch {
