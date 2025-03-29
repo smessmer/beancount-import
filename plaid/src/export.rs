@@ -27,15 +27,12 @@ fn transaction_to_beancount<'a>(
     transaction: &'a TransactionInfo,
 ) -> Directive<'a> {
     let mut meta = hash_map![
-        Cow::Borrowed("plaid_transaction_id") => MetaValue::Text(Cow::Owned(format!("\"{}\"", transaction_id.0))),
+        Cow::Borrowed("plaid_transaction_id") => meta_value_text(&transaction_id.0),
     ];
     if let Some(category) = &transaction.category {
         meta.insert(
             Cow::Borrowed("plaid_category"),
-            MetaValue::Text(Cow::Owned(format!(
-                "\"{}.{}\"",
-                category.primary, category.detailed,
-            ))),
+            meta_value_text(&format!("{}.{}", category.primary, category.detailed)),
         );
     }
     let date = if let Some(authorized_date) = transaction.authorized_date {
@@ -53,22 +50,19 @@ fn transaction_to_beancount<'a>(
     };
     if let Some(location) = &transaction.location {
         if location != "{}" {
-            meta.insert(
-                Cow::Borrowed("plaid_location"),
-                MetaValue::Text(Cow::Owned(format!("\"{}\"", location))),
-            );
+            meta.insert(Cow::Borrowed("plaid_location"), meta_value_text(location));
         }
     }
     if let Some(website) = &transaction.associated_website {
         meta.insert(
             Cow::Borrowed("plaid_associated_website"),
-            MetaValue::Text(Cow::Owned(format!("\"{}\"", website))),
+            meta_value_text(website),
         );
     }
     if let Some(check_number) = &transaction.check_number {
         meta.insert(
             Cow::Borrowed("plaid_check_number"),
-            MetaValue::Text(Cow::Owned(format!("\"{}\"", check_number))),
+            meta_value_text(check_number),
         );
     }
     Directive::Transaction(beancount_core::Transaction {
@@ -100,6 +94,13 @@ fn transaction_to_beancount<'a>(
         meta: hash_map![],
         source: None,
     })
+}
+
+fn meta_value_text(value: &str) -> MetaValue<'static> {
+    let escaped_value = value
+        .replace("\\", "\\\\") // Escape backslashes
+        .replace("\"", "\\\""); // Escape double quotes
+    MetaValue::Text(Cow::Owned(format!("\"{}\"", escaped_value)))
 }
 
 fn account_to_beancount<'a>(account: &'a BeancountAccountInfo) -> beancount_core::Account<'a> {
