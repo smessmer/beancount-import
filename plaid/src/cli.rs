@@ -34,6 +34,9 @@ pub async fn main(args: Args) -> Result<()> {
         Command::Init => cli.main_init().await?,
         Command::AddConnection => cli.main_add_connection().await?,
         Command::ListConnections => cli.main_list_connections().await?,
+        Command::RemoveConnection { connection_name } => {
+            cli.main_remove_connection(&connection_name).await?
+        }
         Command::Sync => cli.main_sync().await?,
         Command::ListTransactions => cli.main_list_transactions().await?,
         Command::ExportAll => cli.main_export_all_transactions().await?,
@@ -116,6 +119,19 @@ impl Cli {
         println!("{}", style_header("Adding connection:"));
         print_connection(&BulletPointPrinter::new_stdout(), &connection);
         self.db.database_mut().bank_connections.push(connection);
+        Ok(())
+    }
+
+    pub async fn main_remove_connection(&mut self, connection_name: &str) -> Result<()> {
+        let bank_connections = &mut self.db.database_mut().bank_connections;
+        let index = bank_connections
+            .iter()
+            .position(|c| c.name() == connection_name)
+            .ok_or_else(|| anyhow!("No connection found with name {connection_name}"))?;
+        let connection = bank_connections.remove(index);
+        println!();
+        println!("{}", style_header("Removed connection:"));
+        print_connection(&BulletPointPrinter::new_stdout(), &connection);
         Ok(())
     }
 

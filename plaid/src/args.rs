@@ -24,6 +24,12 @@ pub enum Command {
     /// List all bank connections in the database
     ListConnections,
 
+    /// Remove a bank connection from the database
+    RemoveConnection {
+        #[clap(short, long)]
+        connection_name: String,
+    },
+
     /// Download transactions from plaid and put them in the local database
     Sync,
 
